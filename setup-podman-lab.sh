@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ------------------------------------------------------------
+# Version detection (falls back to VERSION file when git metadata missing)
+# ------------------------------------------------------------
+LAB_VERSION_FALLBACK="0.5.0"
+LAB_VERSION="$LAB_VERSION_FALLBACK"
+if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if git -C "$SCRIPT_DIR" describe --tags --dirty --always >/dev/null 2>&1; then
+    LAB_VERSION="$(git -C "$SCRIPT_DIR" describe --tags --dirty --always)"
+  fi
+elif [ -f "$SCRIPT_DIR/VERSION" ]; then
+  LAB_VERSION="$(cat "$SCRIPT_DIR/VERSION")"
+fi
+
 # ------------------------------------------------------------
 # Podman Lab Bootstrap (Mac / Linux)
 # ------------------------------------------------------------
@@ -16,16 +31,89 @@ set -e
 
 DEV_USER="dev"
 DEV_PASS="dev"   # TODO: change this for real use!
+GVM_PASSWORD="${GVM_PASSWORD:-admin}"
 
 LAB_ROOT="${PODMAN_LAB_ROOT:-$HOME}"
 PROJECTS_DIR="$LAB_ROOT/PodmanProjects"
 DATA_DIR="$LAB_ROOT/PodmanData"
 
+LAB_VERBOSE="${LAB_VERBOSE:-0}"
+LAB_LOG_DIR="${LAB_LOG_DIR:-$LAB_ROOT/logs}"
+LAB_LOG_FILE_DEFAULT="setup-podman-lab-$(date +%Y%m%d-%H%M%S).log"
+LAB_LOG_FILE="${LAB_LOG_FILE:-$LAB_LOG_DIR/$LAB_LOG_FILE_DEFAULT}"
+LAB_PULL_POLICY="${LAB_PULL:-always}"
+mkdir -p "$LAB_LOG_DIR"
+touch "$LAB_LOG_FILE"
+
+timestamp() {
+  date '+%Y-%m-%d %H:%M:%S'
+}
+
+log_msg() {
+  local level="$1"
+  shift
+  local msg="$*"
+  local ts
+  ts="$(timestamp)"
+  printf '[%s] [%s] %s\n' "$ts" "$level" "$msg" >>"$LAB_LOG_FILE"
+  case "$level" in
+    DEBUG)
+      if [ "$LAB_VERBOSE" = "1" ]; then
+        echo "$msg"
+      fi
+      ;;
+    *)
+      echo "$msg"
+      ;;
+  esac
+}
+
+log_info()  { log_msg INFO "$@"; }
+log_warn()  { log_msg WARN "$@"; }
+log_error() { log_msg ERROR "$@"; }
+log_debug() { log_msg DEBUG "$@"; }
+
+run_logged() {
+  local desc="$1"
+  shift
+  log_info "$desc"
+  log_debug "Running: $*"
+  if [ "$LAB_VERBOSE" = "1" ]; then
+    set +e
+    "$@" 2>&1 | tee -a "$LAB_LOG_FILE"
+    local status=${PIPESTATUS[0]}
+    set -e
+  else
+    set +e
+    "$@" >>"$LAB_LOG_FILE" 2>&1
+    local status=$?
+    set -e
+  fi
+  if [ "$status" -ne 0 ]; then
+    log_error "$desc failed (exit $status). See $LAB_LOG_FILE for details."
+    exit "$status"
+  fi
+}
+
+log_info "setup-podman-lab.sh version $LAB_VERSION"
+log_info "Detailed output will be written to $LAB_LOG_FILE"
+
+PROJECT_DIRS=(
+  kali-vnc pdf-builder ubuntu-dev fedora-dev go-dev python-dev c-dev node-dev
+  alpine-tools nmap-tools packet-analyzer vulnerability-scanner iperf-tools
+  http-test librenms librenms-db snmp-demo
+)
+
+DATA_DIRS=(
+  kali-home pdf-out ubuntu-home fedora-home go-home python-home c-home node-home
+  alpine-home network-out vulnerability-home iperf-out librenms-data librenms-db
+)
+
 # ---------------------------
 # TEARDOWN MODE
 # ---------------------------
 if [ "$1" = "teardown" ]; then
-  echo "==> ❌ TEARDOWN MODE: Removing all containers, images, and folders."
+  log_info "==> ❌ TEARDOWN MODE: Removing all containers, images, and folders."
 
   podman stop -a >/dev/null 2>&1 || true
   podman rm -f -a >/dev/null 2>&1 || true
@@ -43,7 +131,7 @@ if [ "$1" = "teardown" ]; then
 
   rm -rf "$PROJECTS_DIR" "$DATA_DIR"
 
-  echo "==> Cleanup complete. Folders $PROJECTS_DIR and $DATA_DIR removed."
+  log_info "==> Cleanup complete. Folders $PROJECTS_DIR and $DATA_DIR removed."
   exit 0
 fi
 
@@ -61,7 +149,7 @@ fi
 STEP=0
 step() {
   STEP=$((STEP + 1))
-  echo "==> [$STEP/$TOTAL_STEPS] $1"
+  log_info "==> [$STEP/$TOTAL_STEPS] $1"
 }
 
 PLATFORM="unknown"
@@ -72,12 +160,12 @@ elif $IS_LINUX; then
 fi
 
 step "Detecting platform..."
-echo "Detected $PLATFORM"
+log_info "Detected $PLATFORM"
 
 LIGHT=false
 if [ "$1" = "light" ]; then
   LIGHT=true
-  echo "==> Running in **LIGHT** mode (Dev Containers minimized)."
+  log_info "==> Running in **LIGHT** mode (Dev Containers minimized)."
 fi
 
 #######################################
@@ -85,22 +173,22 @@ fi
 #######################################
 step "Verifying Podman installation..."
 if ! command -v podman >/dev/null 2>&1; then
-  echo "==> Podman not found, installing..."
+  log_info "==> Podman not found, installing..."
   if $IS_MAC; then
     if ! command -v brew >/dev/null 2>&1; then
-      echo "Homebrew not found. Network access is required to install it."
+      log_warn "Homebrew not found. Network access is required to install it."
       if [ -z "${AUTO_INSTALL_HOMEBREW:-}" ]; then
         if [ -t 0 ]; then
           read -rp "Proceed with Homebrew install now? [y/N]: " reply
           case "$reply" in
             [Yy]* ) ;;
             * )
-              echo "Skipping automatic Homebrew install. Install it manually, set AUTO_INSTALL_HOMEBREW=1, or rerun when online."
+              log_warn "Skipping automatic Homebrew install. Install it manually, set AUTO_INSTALL_HOMEBREW=1, or rerun when online."
               exit 1
               ;;
           esac
         else
-          echo "Set AUTO_INSTALL_HOMEBREW=1 to auto-install or install manually before rerunning."
+          log_warn "Set AUTO_INSTALL_HOMEBREW=1 to auto-install or install manually before rerunning."
           exit 1
         fi
       fi
@@ -115,11 +203,11 @@ if ! command -v podman >/dev/null 2>&1; then
   elif [ -f /etc/fedora-release ]; then
     sudo dnf -y install podman
   else
-    echo "Unsupported OS. Install Podman manually and rerun."
+    log_error "Unsupported OS. Install Podman manually and rerun."
     exit 1
   fi
 else
-  echo "==> Podman already installed."
+  log_info "==> Podman already installed."
 fi
 
 # --- helper for per-container users ---
@@ -137,7 +225,7 @@ create_user_cmd() {
 ensure_container_absent() {
   local name="$1"
   if podman container exists "$name" >/dev/null 2>&1; then
-    podman rm -f "$name" >/dev/null
+    run_logged "Removing existing container $name" podman rm -f "$name"
   fi
 }
 
@@ -145,10 +233,13 @@ ensure_container_absent() {
 # Folder Layout
 #######################################
 step "Creating clean host folders..."
-echo "Using lab root: $LAB_ROOT"
-mkdir -p \
-  "$PROJECTS_DIR"/{kali-vnc,pdf-builder,ubuntu-dev,fedora-dev,go-dev,python-dev,c-dev,node-dev,alpine-tools,nmap-tools,packet-analyzer,vulnerability-scanner,iperf-tools,http-test,librenms,librenms-db,snmp-demo} \
-  "$DATA_DIR"/{kali-home,pdf-out,ubuntu-home,fedora-home,go-home,python-home,c-home,node-home,alpine-home,network-out,vulnerability-home,iperf-out,librenms-data,librenms-db}
+log_info "Using lab root: $LAB_ROOT"
+for dir in "${PROJECT_DIRS[@]}"; do
+  mkdir -p "$PROJECTS_DIR/$dir"
+done
+for dir in "${DATA_DIRS[@]}"; do
+  mkdir -p "$DATA_DIR/$dir"
+done
 
 #######################################
 # Podman Machine Setup (macOS only)
@@ -156,31 +247,35 @@ mkdir -p \
 if $IS_MAC; then
   step "Resetting Podman machine to a clean state..."
   if podman machine list 2>/dev/null | grep -q 'podman-machine-default'; then
-    podman machine stop >/dev/null 2>&1 || true
-    podman machine rm -f >/dev/null 2>&1 || true
+    log_info "Stopping podman-machine-default (if running)..."
+    if ! podman machine stop >>"$LAB_LOG_FILE" 2>&1; then
+      log_debug "podman machine stop returned non-zero (likely already stopped)."
+    fi
+    log_info "Removing podman-machine-default..."
+    podman machine rm -f >>"$LAB_LOG_FILE" 2>&1
   fi
 
   # init machine
   INIT_DISK_SIZE="${PODMAN_MACHINE_DISK_SIZE:-40}"
-  echo "Initializing Podman machine with 4 CPUs, 4GB RAM, and ${INIT_DISK_SIZE}GB disk..."
-  podman machine init --cpus 4 --memory 4096 --disk-size "$INIT_DISK_SIZE"
+  run_logged "Initializing Podman machine (4 CPU / 4GB RAM / ${INIT_DISK_SIZE}GB disk)" \
+    podman machine init --cpus 4 --memory 4096 --disk-size "$INIT_DISK_SIZE"
 
-  podman machine set --rootful
-  podman machine start
+  run_logged "Configuring podman machine for rootful mode" podman machine set --rootful
+  run_logged "Starting podman machine" podman machine start
 
   # macOS helper
-  echo "==> Installing Podman mac helper (if available)..."
+  log_info "==> Installing Podman mac helper (if available)..."
   HELPER_PATH="$(brew --prefix podman)/bin/podman-mac-helper"
   if [ -x "$HELPER_PATH" ]; then
-    sudo "$HELPER_PATH" install
-    echo "==> Restarting Podman machine to apply helper..."
-    podman machine stop
-    podman machine start
+    run_logged "Installing podman-mac-helper" sudo "$HELPER_PATH" install
+    log_info "==> Restarting Podman machine to apply helper..."
+    run_logged "Stopping podman machine after helper install" podman machine stop
+    run_logged "Restarting podman machine" podman machine start
   else
-    echo "⚠️  podman-mac-helper not found under Homebrew path, skipping helper install."
+    log_warn "podman-mac-helper not found under Homebrew path, skipping helper install."
   fi
 else
-  echo "==> Podman machine setup not required on this platform; using native Podman."
+  log_info "==> Podman machine setup not required on this platform; using native Podman."
 fi
 
 #######################################
@@ -354,8 +449,8 @@ CMD ["bash"]
 EOF
 
 cat > "$PROJECTS_DIR/vulnerability-scanner/Containerfile" <<'EOF'
-FROM ghcr.io/immauss/openvas:latest
-EXPOSE 9392
+FROM mikesplain/openvas:latest
+EXPOSE 443
 EOF
 
 cat > "$PROJECTS_DIR/iperf-tools/Containerfile" <<EOF
@@ -412,14 +507,14 @@ CMD ["/init"]
 EOF
 
 # write generated containerfiles
-echo "--> Generated dev and tooling Containerfiles under $PROJECTS_DIR"
+log_info "--> Generated dev and tooling Containerfiles under $PROJECTS_DIR"
 
 #######################################
 # Network for LibreNMS stack
 #######################################
 step "Ensuring podman 'labnet' network exists..."
 if ! podman network exists labnet >/dev/null 2>&1; then
-  podman network create labnet
+  run_logged "Creating podman network 'labnet'" podman network create labnet
 fi
 
 #######################################
@@ -428,13 +523,11 @@ fi
 step "Building images..."
 for d in "$PROJECTS_DIR"/*; do
   [ -d "$d" ] || continue
-  cd "$d"
   img=$(basename "$d" | tr '[:upper:]' '[:lower:]')
-  echo "--> Building image: $img ..."
-  if ls Containerfile >/dev/null 2>&1; then
-    podman build --pull=always -t "$img" .
+  if [ -f "$d/Containerfile" ]; then
+    run_logged "--> Building image: $img" podman build --pull="$LAB_PULL_POLICY" -t "$img" "$d"
   else
-    echo "    Skipping $img: no Containerfile found."
+    log_warn "    Skipping $img: no Containerfile found."
   fi
 done
 
@@ -442,123 +535,140 @@ step "Running core containers and network tools..."
 
 # General Utilities
 ensure_container_absent "kali-vnc"
-podman run -d --name kali-vnc -p 5901:5901 -v "$DATA_DIR/kali-home:/home/kali" kali-vnc
-podman run --rm -v "$DATA_DIR/pdf-out:/out" pdf-builder
+run_logged "Starting kali-vnc container" \
+  podman run -d --name kali-vnc -p 5901:5901 -v "$DATA_DIR/kali-home:/home/kali" kali-vnc
+run_logged "Generating initial floor plan PDFs" \
+  podman run --rm -v "$DATA_DIR/pdf-out:/out" pdf-builder
 
 # Dev Shells
 if ! $LIGHT; then
   ensure_container_absent "ubuntu-dev"
-  podman run -d --name ubuntu-dev      -v "$DATA_DIR/ubuntu-home:/home/$DEV_USER" ubuntu-dev
+  run_logged "Starting ubuntu-dev container" \
+    podman run -d --name ubuntu-dev      -v "$DATA_DIR/ubuntu-home:/home/$DEV_USER" ubuntu-dev
   ensure_container_absent "fedora-dev"
-  podman run -d --name fedora-dev      -v "$DATA_DIR/fedora-home:/home/$DEV_USER" fedora-dev
+  run_logged "Starting fedora-dev container" \
+    podman run -d --name fedora-dev      -v "$DATA_DIR/fedora-home:/home/$DEV_USER" fedora-dev
   ensure_container_absent "go-dev"
-  podman run -d --name go-dev          -v "$DATA_DIR/go-home:/home/$DEV_USER/app" go-dev
+  run_logged "Starting go-dev container" \
+    podman run -d --name go-dev          -v "$DATA_DIR/go-home:/home/$DEV_USER/app" go-dev
   ensure_container_absent "python-dev"
-  podman run -d --name python-dev      -v "$DATA_DIR/python-home:/home/$DEV_USER" python-dev
+  run_logged "Starting python-dev container" \
+    podman run -d --name python-dev      -v "$DATA_DIR/python-home:/home/$DEV_USER" python-dev
   ensure_container_absent "c-dev"
-  podman run -d --name c-dev           -v "$DATA_DIR/c-home:/home/$DEV_USER" c-dev
+  run_logged "Starting c-dev container" \
+    podman run -d --name c-dev           -v "$DATA_DIR/c-home:/home/$DEV_USER" c-dev
   ensure_container_absent "node-dev"
-  podman run -d --name node-dev        -v "$DATA_DIR/node-home:/home/$DEV_USER/app" node-dev
+  run_logged "Starting node-dev container" \
+    podman run -d --name node-dev        -v "$DATA_DIR/node-home:/home/$DEV_USER/app" node-dev
   ensure_container_absent "alpine-tools"
-  podman run -d --name alpine-tools    -v "$DATA_DIR/alpine-home:/home/$DEV_USER" alpine-tools
+  run_logged "Starting alpine-tools container" \
+    podman run -d --name alpine-tools    -v "$DATA_DIR/alpine-home:/home/$DEV_USER" alpine-tools
 else
   ensure_container_absent "ubuntu-dev"
-  podman run -d --name ubuntu-dev      -v "$DATA_DIR/ubuntu-home:/home/$DEV_USER" ubuntu-dev
+  run_logged "Starting ubuntu-dev container" \
+    podman run -d --name ubuntu-dev      -v "$DATA_DIR/ubuntu-home:/home/$DEV_USER" ubuntu-dev
 fi
 
 # Networking / Security
 ensure_container_absent "nmap-tools"
-podman run -d --name nmap-tools nmap-tools
+run_logged "Starting nmap-tools container" podman run -d --name nmap-tools nmap-tools
 
 ensure_container_absent "packet-analyzer"
-podman run -d --name packet-analyzer \
-  --net=host \
-  --cap-add=NET_ADMIN --cap-add=NET_RAW \
-  -v "$DATA_DIR/network-out:/home/$DEV_USER/captures" \
-  packet-analyzer
+run_logged "Starting packet-analyzer container" \
+  podman run -d --name packet-analyzer \
+    --net=host \
+    --cap-add=NET_ADMIN --cap-add=NET_RAW \
+    -v "$DATA_DIR/network-out:/home/$DEV_USER/captures" \
+    packet-analyzer
 
 ensure_container_absent "iperf-tools"
-podman run -d --name iperf-tools \
-  -v "$DATA_DIR/iperf-out:/home/$DEV_USER" \
-  iperf-tools
+run_logged "Starting iperf-tools container" \
+  podman run -d --name iperf-tools \
+    -v "$DATA_DIR/iperf-out:/home/$DEV_USER" \
+    iperf-tools
 
 ensure_container_absent "vulnerability-scanner"
-podman run -d --name vulnerability-scanner \
-  -p 4000:9392 \
-  -v "$DATA_DIR/vulnerability-home:/data" \
-  vulnerability-scanner
+run_logged "Starting vulnerability-scanner container" \
+  podman run -d --name vulnerability-scanner \
+    -p 4000:443 \
+    -e PASSWORD="$GVM_PASSWORD" \
+    -v "$DATA_DIR/vulnerability-home:/var/lib/openvas" \
+    vulnerability-scanner
 
 ensure_container_absent "http-test"
-podman run -d --name http-test -p 8000:8000 http-test
+run_logged "Starting http-test container" podman run -d --name http-test -p 8000:8000 http-test
 
 # LibreNMS stack
 ensure_container_absent "librenms-db"
-podman run -d --name librenms-db \
-  --network labnet \
-  -v "$DATA_DIR/librenms-db:/var/lib/mysql" \
-  librenms-db
+run_logged "Starting librenms-db (MariaDB) container" \
+  podman run -d --name librenms-db \
+    --network labnet \
+    -v "$DATA_DIR/librenms-db:/var/lib/mysql" \
+    librenms-db
 
 ensure_container_absent "librenms"
-podman run -d --name librenms \
-  --network labnet \
-  -p 8001:8000 \
-  -v "$DATA_DIR/librenms-data:/data" \
-  librenms
+run_logged "Starting librenms application container" \
+  podman run -d --name librenms \
+    --network labnet \
+    -p 8001:8000 \
+    -v "$DATA_DIR/librenms-data:/data" \
+    librenms
 
 # SNMP demo target for LibreNMS
 ensure_container_absent "snmp-demo"
-podman run -d --name snmp-demo \
-  --network labnet \
-  snmp-demo
+run_logged "Starting snmp-demo container" \
+  podman run -d --name snmp-demo \
+    --network labnet \
+    snmp-demo
 
 #######################################
 # Final Output
 #######################################
-echo ""
-echo "✅ Setup complete! To clean up, run: $0 teardown"
-echo "Running containers:"
-podman ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}'
+log_info ""
+log_info "✅ Setup complete! To clean up, run: $0 teardown"
+log_info "Running containers:"
+podman ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}' | tee -a "$LAB_LOG_FILE"
 
-echo ""
-echo "### Access Information ###"
-echo "Common Dev User/Pass: $DEV_USER / $DEV_PASS"
-echo ""
-echo "🖥️ Kali Desktop (VNC):"
-echo "  Connect to: localhost:5901"
-echo "  User: kali   Pass: kali"
-echo "  VNC password: kali"
-echo ""
-echo "📄 Floor plan PDFs:"
-echo "  $DATA_DIR/pdf-out/"
-echo ""
-echo "💻 Dev Containers:"
-echo "  podman exec -it ubuntu-dev bash"
-echo "  podman exec -it fedora-dev bash"
-echo "  podman exec -it go-dev bash"
-echo "  podman exec -it python-dev bash"
-echo "  podman exec -it c-dev bash"
-echo "  podman exec -it node-dev bash"
-echo "  podman exec -it alpine-tools bash"
-echo ""
-echo "🌐 Net/Sec:"
-echo "  podman exec -it nmap-tools nmap -v <target>"
-echo "  podman exec -it packet-analyzer bash   # sudo tshark -i eth0"
-echo "  podman exec -it iperf-tools bash       # iperf3 -s / -c"
-echo "  GVM: https://localhost:4000  (proxied to container port 9392; first run can take a few mins)"
-echo ""
-echo "🧪 HTTP Test:"
-echo "  http://localhost:8000  -> 'OK'"
-echo ""
-echo "📡 LibreNMS:"
-echo "  http://localhost:8001"
-echo "  DB: mariadb on container 'librenms-db' (network: labnet)"
-echo "  Note: first run may take 1–2 minutes to finish migrations."
-echo ""
-echo "  NOTE: on macOS/Podman this captures from the VM, not your Mac's Wi-Fi."
+log_info ""
+log_info "### Access Information ###"
+log_info "Common Dev User/Pass: $DEV_USER / $DEV_PASS"
+log_info ""
+log_info "🖥️ Kali Desktop (VNC):"
+log_info "  Connect to: localhost:5901"
+log_info "  User: kali   Pass: kali"
+log_info "  VNC password: kali"
+log_info ""
+log_info "📄 Floor plan PDFs:"
+log_info "  $DATA_DIR/pdf-out/"
+log_info ""
+log_info "💻 Dev Containers:"
+log_info "  podman exec -it ubuntu-dev bash"
+log_info "  podman exec -it fedora-dev bash"
+log_info "  podman exec -it go-dev bash"
+log_info "  podman exec -it python-dev bash"
+log_info "  podman exec -it c-dev bash"
+log_info "  podman exec -it node-dev bash"
+log_info "  podman exec -it alpine-tools bash"
+log_info ""
+log_info "🌐 Net/Sec:"
+log_info "  podman exec -it nmap-tools nmap -v <target>"
+log_info "  podman exec -it packet-analyzer bash   # sudo tshark -i eth0"
+log_info "  podman exec -it iperf-tools bash       # iperf3 -s / -c"
+log_info "  GVM: https://localhost:4000  (maps to container port 443; default login admin / $GVM_PASSWORD)"
+log_info ""
+log_info "🧪 HTTP Test:"
+log_info "  http://localhost:8000  -> 'OK'"
+log_info ""
+log_info "📡 LibreNMS:"
+log_info "  http://localhost:8001"
+log_info "  DB: mariadb on container 'librenms-db' (network: labnet)"
+log_info "  Note: first run may take 1–2 minutes to finish migrations."
+log_info ""
+log_info "  NOTE: on macOS/Podman this captures from the VM, not your Mac's Wi-Fi."
 
 if $IS_MAC; then
   SOCK=$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')
-  echo "🐳 Docker-compatible socket (macOS):"
-  echo "  export DOCKER_HOST='unix://$SOCK'"
-  echo "  # Add that to ~/.zshrc if you want it permanent"
+  log_info "🐳 Docker-compatible socket (macOS):"
+  log_info "  export DOCKER_HOST='unix://$SOCK'"
+  log_info "  # Add that to ~/.zshrc if you want it permanent"
 fi
