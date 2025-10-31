@@ -28,7 +28,7 @@ DATA_DIR="$LAB_ROOT/PodmanData"
 LAB_VERBOSE="${LAB_VERBOSE:-0}"
 LAB_LOG_DIR="${LAB_LOG_DIR:-}"
 LAB_LOG_FILE="${LAB_LOG_FILE:-}"
-LAB_PULL_POLICY="${LAB_PULL:-always}"
+LAB_PULL_POLICY="${LAB_PULL:-if-needed}"
 LAB_IMAGE_PREFIX="${LAB_IMAGE_PREFIX:-podman-lab}"
 LAB_PROGRESS_ENABLED="${LAB_PROGRESS_ENABLED:-1}"
 LAB_QUIET="${LAB_QUIET:-0}"
@@ -41,12 +41,20 @@ lab_log_info "Detailed output will be written to $LAB_LOG_FILE"
 
 usage() {
   cat <<'EOF'
-Usage: setup-podman-lab.sh [light] [teardown] [options]
+Usage: setup-podman-lab.sh [command] [options]
+
+Commands:
+  (default)        Build and run the selected profile/components
+  light            Shortcut for default run with dev/light stack
+  teardown         Stop containers, remove images, and delete lab folders
+  rebuild TARGET   Build images for the specified component list/profile
+  rerun TARGET     Run containers for the specified component list/profile
 
 Options:
   --components LIST   Build/run only the specified comma-separated components.
   --build-only        Execute build phase only (skip container startup).
   --run-only          Skip image builds and only start containers.
+  --profile NAME      Use a predefined component profile (all, dev, net, sec, monitor).
   --no-progress       Disable progress bar output.
   --progress          Enable progress bar output.
   --quiet             Suppress informational console output (logs still recorded).
@@ -55,11 +63,14 @@ Options:
 
 Environment overrides:
   LAB_COMPONENTS      Default component filter (comma-separated).
-  LAB_PULL            Podman build pull policy (default: always).
+  LAB_PROFILE         Default profile to apply (all, dev, net, sec, monitor).
+  LAB_PULL            Podman build pull policy (default: if-needed).
   LAB_IMAGE_PREFIX    Image tag namespace (default: podman-lab).
   LAB_PROGRESS_ENABLED  Default progress bar toggle (1 enabled, 0 disabled).
   LAB_VERBOSE         Default verbose toggle (0/1).
   LAB_QUIET           Default quiet toggle (0/1).
+  LAB_LOG_FILE        Override log file path.
+  LAB_SKIP_REGISTRY_CHECK  Set to 1 to skip Docker Hub login warning.
 EOF
 }
 
@@ -68,6 +79,8 @@ TEARDOWN="false"
 DO_BUILD="true"
 DO_RUN="true"
 COMPONENT_FILTER="${LAB_COMPONENTS:-}"
+PROFILE="${LAB_PROFILE:-all}"
+TARGET_SPEC=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -76,6 +89,22 @@ while [ $# -gt 0 ]; do
       ;;
     teardown)
       TEARDOWN="true"
+      ;;
+    rebuild)
+      DO_BUILD="true"
+      DO_RUN="false"
+      if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+        TARGET_SPEC="$2"
+        shift
+      fi
+      ;;
+    rerun)
+      DO_BUILD="false"
+      DO_RUN="true"
+      if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+        TARGET_SPEC="$2"
+        shift
+      fi
       ;;
     --components)
       if [ $# -lt 2 ]; then
@@ -93,6 +122,17 @@ while [ $# -gt 0 ]; do
       ;;
     --run-only)
       DO_BUILD="false"
+      ;;
+    --profile)
+      if [ $# -lt 2 ]; then
+        lab_log_error "--profile requires a profile name."
+        exit 1
+      fi
+      PROFILE="$2"
+      shift
+      ;;
+    --profile=*)
+      PROFILE="${1#*=}"
       ;;
     --no-progress)
       LAB_PROGRESS_ENABLED=0
@@ -124,7 +164,21 @@ if [ "$DO_BUILD" = "false" ] && [ "$DO_RUN" = "false" ]; then
   exit 1
 fi
 
-lab_components_init "$COMPONENT_FILTER"
+# If a positional target was supplied for rebuild/rerun, map it to profile/components when flags absent
+if [ -n "$TARGET_SPEC" ] && [ -z "$COMPONENT_FILTER" ]; then
+  if lab_profile_exists "$TARGET_SPEC"; then
+    PROFILE="$TARGET_SPEC"
+  else
+    COMPONENT_FILTER="$TARGET_SPEC"
+  fi
+fi
+
+lab_components_init "$PROFILE" "$COMPONENT_FILTER"
+if [ "$LAB_SELECTED_PROFILE" = "custom" ]; then
+  lab_log_info "Profile: custom (explicit component selection)"
+elif [ "$LAB_SELECTED_PROFILE" != "all" ]; then
+  lab_log_info "Profile: $LAB_SELECTED_PROFILE"
+fi
 if lab_component_filters_active; then
   lab_log_info "Component filter active: $(lab_component_filter_string)"
 fi
@@ -166,6 +220,27 @@ progress_bar() {
     printf '.%.0s' $(seq 1 "$empty")
   fi
   printf ']'
+}
+
+lab_warn_registry_auth() {
+  if [ "${LAB_SKIP_REGISTRY_CHECK:-0}" = "1" ]; then
+    return
+  fi
+  if [ "$DO_BUILD" != "true" ]; then
+    return
+  fi
+  if ! command -v podman >/dev/null 2>&1; then
+    return
+  fi
+  set +e
+  podman login --get-login docker.io >/dev/null 2>&1
+  local status=$?
+  set -e
+  if [ $status -ne 0 ]; then
+    lab_log_warn "Docker Hub authentication not detected. Unauthenticated pulls are rate limited."
+    lab_log_warn "Run 'podman login docker.io' before launching the lab to avoid throttling."
+    lab_log_warn "Set LAB_SKIP_REGISTRY_CHECK=1 to silence this warning."
+  fi
 }
 
 UNAME_OUT="$(uname -s)"
@@ -297,6 +372,7 @@ if [ "$DO_RUN" = "true" ]; then
 fi
 
 if [ "$DO_BUILD" = "true" ]; then
+  lab_warn_registry_auth
   step "Building images..."
   lab_build_images "$PROJECTS_DIR" "$LAB_PULL_POLICY"
 else

@@ -13,6 +13,10 @@ LAB_COMPONENT_FILTER_ACTIVE="false"
 LAB_COMPONENT_FILTER_ARRAY=()
 LAB_COMPONENT_FILTER_LIST=""
 LAB_COMPONENT_FILTER_STRING=""
+# shellcheck disable=SC2034
+LAB_SELECTED_PROFILE="all"
+# shellcheck disable=SC2034
+LAB_AVAILABLE_PROFILES="all,dev,net,sec,monitor"
 
 lab_component_known() {
   local name="$1"
@@ -25,46 +29,98 @@ lab_component_known() {
   return 1
 }
 
-lab_components_init() {
-  local raw="$1"
-  LAB_COMPONENT_FILTER_ACTIVE="false"
-  LAB_COMPONENT_FILTER_ARRAY=()
-  LAB_COMPONENT_FILTER_LIST=""
-  LAB_COMPONENT_FILTER_STRING=""
+lab_profile_exists() {
+  local name="$1"
+  case "$name" in
+    ""|all|dev|net|sec|monitor) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
+lab_profile_components() {
+  local name="$1"
+  case "$name" in
+    all|"") printf '%s\n' "${LAB_PROJECT_DIRS[*]}" ;;
+    dev) printf 'ubuntu-dev fedora-dev go-dev python-dev c-dev node-dev alpine-tools pdf-builder' ;;
+    net) printf 'nmap-tools packet-analyzer iperf-tools http-test snmp-demo' ;;
+    sec) printf 'kali-vnc vulnerability-scanner nmap-tools' ;;
+    monitor) printf 'librenms librenms-db snmp-demo http-test' ;;
+    *) printf '' ;;
+  esac
+}
+
+lab_components_parse_list() {
+  local raw="$1"
   if [ -z "$raw" ]; then
+    printf ''
     return
   fi
 
+  local parsed=()
   local original_ifs="$IFS"
   IFS=','
-  read -r -a LAB_COMPONENT_FILTER_ARRAY <<<"$raw"
+  read -r -a parsed <<<"$raw"
   IFS="$original_ifs"
 
   local cleaned=()
   local item
-  for item in "${LAB_COMPONENT_FILTER_ARRAY[@]}"; do
+  for item in "${parsed[@]}"; do
     item="$(printf '%s' "$item" | tr '[:upper:]' '[:lower:]')"
     item="${item//[[:space:]]/}"
     if [ -z "$item" ]; then
       continue
     fi
     if lab_component_known "$item"; then
-      cleaned+=("$item")
+      if [[ " ${cleaned[*]} " != *" $item "* ]]; then
+        cleaned+=("$item")
+      fi
     else
       lab_log_warn "Ignoring unknown component '$item' in filter list."
     fi
   done
 
-  if [ "${#cleaned[@]}" -gt 0 ]; then
-    LAB_COMPONENT_FILTER_ACTIVE="true"
-    LAB_COMPONENT_FILTER_ARRAY=("${cleaned[@]}")
-    LAB_COMPONENT_FILTER_LIST="${LAB_COMPONENT_FILTER_ARRAY[*]}"
-    local temp
-    temp="${LAB_COMPONENT_FILTER_ARRAY[*]}"
-    LAB_COMPONENT_FILTER_STRING="$(printf '%s' "$temp" | tr ' ' ',')"
+  printf '%s\n' "${cleaned[*]}"
+}
+
+lab_components_init() {
+  local profile="$1"
+  local explicit="$2"
+
+  LAB_COMPONENT_FILTER_ACTIVE="false"
+  LAB_COMPONENT_FILTER_ARRAY=()
+  LAB_COMPONENT_FILTER_LIST=""
+  LAB_COMPONENT_FILTER_STRING=""
+  LAB_SELECTED_PROFILE="all"
+
+  local cleaned_list=""
+
+  if [ -n "$explicit" ]; then
+    cleaned_list="$(lab_components_parse_list "$explicit")"
+    LAB_SELECTED_PROFILE="custom"
   else
-    LAB_COMPONENT_FILTER_ARRAY=()
+    if [ -z "$profile" ]; then
+      profile="all"
+    fi
+    if ! lab_profile_exists "$profile"; then
+      lab_log_warn "Unknown profile '$profile'. Falling back to 'all'."
+      profile="all"
+    fi
+    # shellcheck disable=SC2034
+    LAB_SELECTED_PROFILE="$profile"
+    if [ "$profile" != "all" ]; then
+      cleaned_list="$(lab_profile_components "$profile")"
+    fi
+  fi
+
+  if [ -n "$cleaned_list" ]; then
+    read -r -a LAB_COMPONENT_FILTER_ARRAY <<<"$cleaned_list"
+    if [ "${#LAB_COMPONENT_FILTER_ARRAY[@]}" -gt 0 ]; then
+      LAB_COMPONENT_FILTER_ACTIVE="true"
+      LAB_COMPONENT_FILTER_LIST="${LAB_COMPONENT_FILTER_ARRAY[*]}"
+      local temp
+      temp="${LAB_COMPONENT_FILTER_ARRAY[*]}"
+      LAB_COMPONENT_FILTER_STRING="$(printf '%s' "$temp" | tr ' ' ',')"
+    fi
   fi
 }
 
@@ -122,4 +178,8 @@ lab_component_enabled() {
 
 lab_component_enabled_quiet() {
   __lab_component_enabled "$1" "false"
+}
+
+lab_components_selected_profile() {
+  printf '%s' "$LAB_SELECTED_PROFILE"
 }

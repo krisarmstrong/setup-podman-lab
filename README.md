@@ -34,6 +34,10 @@ No Docker Desktop tax. No manual setup. No excuses.
   - 🌐 **HTTP Test Server** – Python HTTP server for quick endpoint checks  
   - 🧾 **PDF Builder** – Generates floorplan PDFs via ReportLab  
   - 📈 **LibreNMS Stack** – LibreNMS + MariaDB + SNMP Demo node
+- **Flexible automation**
+  - Profiles for dev / net / security / monitoring stacks
+  - Target specific components or split build/run phases
+  - Quiet / verbose / progress toggles for CI scripts
 
 ---
 
@@ -57,6 +61,14 @@ No Docker Desktop tax. No manual setup. No excuses.
    ```
 
 3. Grab coffee ☕ — it builds ~15 containers.
+
+> Running in a sandbox or on a shared machine? Set `PODMAN_LAB_ROOT` to redirect the generated `PodmanProjects/` and `PodmanData/` folders, for example:  
+> `PODMAN_LAB_ROOT="$PWD/lab-tmp" ./setup-podman-lab.sh light`
+>
+> On macOS, adjust the Podman VM disk size with `PODMAN_MACHINE_DISK_SIZE=120` if you need more space.
+>
+> First-time pull? Avoid Docker Hub throttling by authenticating once:  
+> `podman login docker.io`
 
 ---
 
@@ -91,7 +103,10 @@ No Docker Desktop tax. No manual setup. No excuses.
 | Command | Purpose |
 |----------|----------|
 | `podman ps` | List running containers |
-| `podman exec -it ubuntu-dev bash` | Open a shell in Ubuntu dev container |
+| `./setup-podman-lab.sh --profile dev --build-only` | Rebuild just the dev stack |
+| `./setup-podman-lab.sh --profile dev --run-only` | Restart previously built dev containers |
+| `./setup-podman-lab.sh --components kali-vnc,http-test` | Target specific components |
+| `podman exec -it ubuntu-dev bash` | Open a shell in the Ubuntu dev container |
 | `podman exec -it packet-analyzer bash` | Run Wireshark CLI (tshark) |
 | `podman logs librenms` | Check LibreNMS startup logs |
 | `podman machine inspect` | Show machine config (Mac) |
@@ -131,6 +146,13 @@ Each container gets its own subfolder, so nothing collides.
 - `podman-mac-helper` installed automatically for native networking  
 - Capture containers (like packet-analyzer) see VM interfaces, not Wi-Fi directly
 
+**Avoid Docker Hub rate limiting:**  
+Authenticate once before running the full lab so base images pull without throttling:
+```bash
+podman login docker.io
+```
+(If you prefer Docker CLI, `docker login` works too.)
+
 To use Docker-style commands:
 ```bash
 export DOCKER_HOST="unix://$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')"
@@ -161,13 +183,53 @@ podman machine set --cpus 8 --memory 8192
 podman machine restart
 ```
 
+**Hit Docker Hub “too many requests”:**  
+Unauthenticated pulls are rate limited. Run `podman login docker.io`, or retry later once the limit resets.
+
+---
+
+## 🧭 Component Profiles & Flags
+
+| Profile | Includes |
+|---------|----------|
+| `all` *(default)* | Everything in the lab |
+| `dev` | ubuntu-dev, fedora-dev, go-dev, python-dev, c-dev, node-dev, alpine-tools, pdf-builder |
+| `net` | nmap-tools, packet-analyzer, iperf-tools, http-test, snmp-demo |
+| `sec` | kali-vnc, vulnerability-scanner, nmap-tools |
+| `monitor` | librenms, librenms-db, snmp-demo, http-test |
+
+### CLI switches
+
+- `--profile NAME` Select one of the profiles above.
+- `--components a,b,c` Build/run only the listed components (overrides profile).
+- `--build-only` Run the builds but skip container startup.
+- `--run-only` Start containers assuming images already exist.
+- `--quiet` Suppress INFO-level console output (logs still written).
+- `--verbose` Stream command output and include DEBUG logs.
+- `--no-progress` / `--progress` Toggle the textual progress bar.
+
+### Environment overrides
+
+| Variable | Purpose |
+|----------|---------|
+| `LAB_PROFILE` | Default profile when `--profile` isn’t provided. |
+| `LAB_COMPONENTS` | Default component list (comma-separated). |
+| `LAB_PULL` | Podman pull policy; defaults to `if-needed` (set `always` for clean bases). |
+| `LAB_IMAGE_PREFIX` | Namespace for built images (default `podman-lab`). |
+| `LAB_PROGRESS_ENABLED` | Set `0` to disable the progress bar globally. |
+| `LAB_VERBOSE` / `LAB_QUIET` | Default logging verbosity toggles. |
+| `LAB_LOG_FILE` | Target log file path (defaults under `$PODMAN_LAB_ROOT/logs`). |
+| `LAB_SKIP_REGISTRY_CHECK` | Set `1` to suppress the Docker Hub login warning. |
+
+Detailed logs for every run live in `$(PODMAN_LAB_ROOT:-$HOME)/logs/setup-podman-lab-<timestamp>.log`.
+
 ---
 
 ## 👤 Author
 
 **Kris Armstrong**  
 Sales / Systems Engineer • Network & Cybersecurity Specialist  
-**“The Man. The Myth. The Legend.”**  
+**“The Man. The Myth. The Legend.”**
 
 [LinkedIn](https://www.linkedin.com/in/kris-armstrong) | [GitHub](https://github.com/krisarmstrong)
 
