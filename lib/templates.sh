@@ -280,3 +280,25 @@ EXPOSE 8000
 CMD ["/init"]
 EOF
 }
+lab_base_image_for() {
+  case "$1" in
+    kali-vnc) printf 'kalilinux/kali-rolling' ;;
+    pdf-builder) printf 'python:3.12-slim' ;;
+    ubuntu-dev) printf 'ubuntu:latest' ;;
+    fedora-dev) printf 'fedora:latest' ;;
+    go-dev) printf 'golang:latest' ;;
+    python-dev) printf 'python:latest' ;;
+    node-dev) printf 'node:latest' ;;
+    c-dev) printf 'ubuntu:latest' ;;
+    alpine-tools) printf 'alpine:latest' ;;
+    nmap-tools) printf 'debian:bookworm-slim' ;;
+    packet-analyzer) printf 'ubuntu:latest' ;;
+    vulnerability-scanner) printf 'mikesplain/openvas:latest' ;;
+    iperf-tools) printf 'ubuntu:latest' ;;
+    http-test) printf 'python:3.12-slim' ;;
+    librenms) printf 'librenms/librenms:latest' ;;
+    librenms-db) printf 'mariadb:11' ;;
+    snmp-demo) printf 'debian:stable-slim' ;;
+    *) printf '' ;;
+  esac
+}

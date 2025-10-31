@@ -37,6 +37,7 @@ No Docker Desktop tax. No manual setup. No excuses.
 - **Flexible automation**
   - Profiles for dev / net / security / monitoring stacks
   - Target specific components or split build/run phases
+  - Parallel image builds (tunable via `LAB_BUILD_CONCURRENCY`)
   - Quiet / verbose / progress toggles for CI scripts
 
 ---
@@ -186,6 +187,9 @@ podman machine restart
 **Hit Docker Hub “too many requests”:**  
 Unauthenticated pulls are rate limited. Run `podman login docker.io`, or retry later once the limit resets.
 
+**Working fully offline:**  
+Pre-pull the base images you need (e.g. `podman pull ubuntu:latest`), then run with `LAB_OFFLINE_MODE=1` to disable remote pulls.
+
 ---
 
 ## 🧭 Component Profiles & Flags
@@ -217,9 +221,11 @@ Unauthenticated pulls are rate limited. Run `podman login docker.io`, or retry l
 | `LAB_PULL` | Podman pull policy; defaults to `if-needed` (set `always` for clean bases). |
 | `LAB_IMAGE_PREFIX` | Namespace for built images (default `podman-lab`). |
 | `LAB_PROGRESS_ENABLED` | Set `0` to disable the progress bar globally. |
+| `LAB_BUILD_CONCURRENCY` | Parallel podman builds (default 2; set 1 to disable). |
 | `LAB_VERBOSE` / `LAB_QUIET` | Default logging verbosity toggles. |
 | `LAB_LOG_FILE` | Target log file path (defaults under `$PODMAN_LAB_ROOT/logs`). |
 | `LAB_SKIP_REGISTRY_CHECK` | Set `1` to suppress the Docker Hub login warning. |
+| `LAB_OFFLINE_MODE` | Set `1` to require pre-pulled base images (`LAB_PULL` forced to `never`). |
 
 Detailed logs for every run live in `$(PODMAN_LAB_ROOT:-$HOME)/logs/setup-podman-lab-<timestamp>.log`.
 

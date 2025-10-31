@@ -37,6 +37,34 @@ lab_create_labnet_network() {
   fi
 }
 
+lab_verify_base_images() {
+  local missing=()
+  local component
+  for component in "${LAB_PROJECT_DIRS[@]}"; do
+    if ! lab_component_enabled_quiet "$component"; then
+      continue
+    fi
+    local base_image
+    base_image="$(lab_base_image_for "$component")"
+    if [ -z "$base_image" ]; then
+      continue
+    fi
+    if ! podman image exists "$base_image" >/dev/null 2>&1; then
+      missing+=("$base_image")
+    fi
+  done
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    lab_log_error "Offline mode requested but required base images are missing:"
+    local img
+    for img in "${missing[@]}"; do
+      lab_log_error "  - $img"
+    done
+    lab_log_error "Import or pre-pull the images above (podman pull …) or disable LAB_OFFLINE_MODE."
+    exit 1
+  fi
+}
+
 lab_start_container_if_enabled() {
   local name="$1"
   local description="$2"
@@ -63,20 +91,101 @@ lab_run_job_if_enabled() {
 lab_build_images() {
   local projects_dir="$1"
   local pull_policy="$2"
+  local concurrency="${LAB_BUILD_CONCURRENCY:-2}"
+  if ! [[ "$concurrency" =~ ^[0-9]+$ ]] || [ "$concurrency" -lt 1 ]; then
+    concurrency=1
+  fi
+
+  local queue=()
   local img_dir
   for img_dir in "$projects_dir"/*; do
     [ -d "$img_dir" ] || continue
-    if [ -f "$img_dir/Containerfile" ]; then
+    if [ ! -f "$img_dir/Containerfile" ]; then
+      lab_log_warn "    Skipping $(basename "$img_dir"): no Containerfile found."
+      continue
+    fi
+    local base
+    base=$(basename "$img_dir")
+    if ! lab_component_enabled "$base"; then
+      continue
+    fi
+    queue+=("$img_dir")
+  done
+
+  if [ "${#queue[@]}" -eq 0 ]; then
+    lab_log_info "No images selected for build."
+    return
+  fi
+
+  if [ "$concurrency" -le 1 ] || [ "${#queue[@]}" -eq 1 ]; then
+    local dir
+    for dir in "${queue[@]}"; do
+      local tag
+      tag="$(lab_image_name "$(basename "$dir")")"
+      lab_run_logged "--> Building image: $tag" podman build --pull="$pull_policy" -t "$tag" "$dir"
+    done
+    return
+  fi
+
+  lab_log_info "Building images with concurrency=$concurrency ..."
+  local -a pid_queue=()
+  local -a tag_queue=()
+  local active=0
+  local idx=0
+  while [ "$idx" -lt "${#queue[@]}" ]; do
+    while [ "$idx" -lt "${#queue[@]}" ] && [ "$active" -lt "$concurrency" ]; do
+      local dir="${queue[$idx]}"
+      idx=$((idx + 1))
       local base
-      base=$(basename "$img_dir")
-      if ! lab_component_enabled "$base"; then
-        continue
-      fi
+      base=$(basename "$dir")
       local tag
       tag="$(lab_image_name "$base")"
-      lab_run_logged "--> Building image: $tag" podman build --pull="$pull_policy" -t "$tag" "$img_dir"
+      (
+        podman build --pull="$pull_policy" -t "$tag" "$dir"
+      ) >>"$LAB_LOG_FILE" 2>&1 &
+      local pid=$!
+      pid_queue+=("$pid")
+      tag_queue+=("$tag")
+      active=${#pid_queue[@]}
+      lab_log_info "--> Building image (async): $tag [pid $pid]"
+    done
+
+    if [ "${#pid_queue[@]}" -ge "$concurrency" ]; then
+      local pid="${pid_queue[0]}"
+      local tag="${tag_queue[0]}"
+      wait "$pid"
+      local status=$?
+      if [ "${#pid_queue[@]}" -gt 1 ]; then
+        pid_queue=("${pid_queue[@]:1}")
+        tag_queue=("${tag_queue[@]:1}")
+      else
+        pid_queue=()
+        tag_queue=()
+      fi
+      active=${#pid_queue[@]}
+      if [ $status -ne 0 ]; then
+        lab_log_error "Image build failed for $tag (exit $status). See $LAB_LOG_FILE."
+        for pid in "${pid_queue[@]}"; do
+          wait "$pid" >/dev/null 2>&1 || true
+        done
+        exit $status
+      else
+        lab_log_info "✔ Image build completed: $tag"
+      fi
+    fi
+  done
+
+  local idx_final
+  for idx_final in "${!pid_queue[@]}"; do
+    local pid="${pid_queue[$idx_final]}"
+    local tag="${tag_queue[$idx_final]}"
+    wait "$pid"
+    local status=$?
+    if [ $status -ne 0 ]; then
+      lab_log_error "Image build failed for $tag (exit $status). See $LAB_LOG_FILE."
+      exit $status
     else
-      lab_log_warn "    Skipping $(basename "$img_dir"): no Containerfile found."
+      lab_log_info "✔ Image build completed: $tag"
     fi
   done
 }

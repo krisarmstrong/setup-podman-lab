@@ -32,8 +32,16 @@ LAB_PULL_POLICY="${LAB_PULL:-if-needed}"
 LAB_IMAGE_PREFIX="${LAB_IMAGE_PREFIX:-podman-lab}"
 LAB_PROGRESS_ENABLED="${LAB_PROGRESS_ENABLED:-1}"
 LAB_QUIET="${LAB_QUIET:-0}"
+LAB_OFFLINE="${LAB_OFFLINE_MODE:-0}"
 # Remove trailing slash for consistency
 LAB_IMAGE_PREFIX="${LAB_IMAGE_PREFIX%/}"
+
+if [ "$LAB_OFFLINE" = "true" ]; then
+  LAB_OFFLINE=1
+fi
+if [ "$LAB_OFFLINE" = "1" ]; then
+  LAB_PULL_POLICY="never"
+fi
 
 lab_init_logging "$LAB_ROOT" "$LAB_VERBOSE" "$LAB_LOG_DIR" "$LAB_LOG_FILE"
 lab_log_info "setup-podman-lab.sh version $LAB_VERSION"
@@ -67,10 +75,12 @@ Environment overrides:
   LAB_PULL            Podman build pull policy (default: if-needed).
   LAB_IMAGE_PREFIX    Image tag namespace (default: podman-lab).
   LAB_PROGRESS_ENABLED  Default progress bar toggle (1 enabled, 0 disabled).
+  LAB_BUILD_CONCURRENCY  Parallel builds (default 2, set 1 to disable).
   LAB_VERBOSE         Default verbose toggle (0/1).
   LAB_QUIET           Default quiet toggle (0/1).
   LAB_LOG_FILE        Override log file path.
   LAB_SKIP_REGISTRY_CHECK  Set to 1 to skip Docker Hub login warning.
+  LAB_OFFLINE_MODE    Set to 1 to require pre-pulled base images (disables pulls).
 EOF
 }
 
@@ -183,6 +193,10 @@ if lab_component_filters_active; then
   lab_log_info "Component filter active: $(lab_component_filter_string)"
 fi
 
+if [ "$LAB_OFFLINE" = "1" ]; then
+  lab_log_info "Offline mode: expecting all base images to be available locally."
+fi
+
 if [ "$TEARDOWN" = "true" ]; then
   lab_log_info "==> ❌ TEARDOWN MODE: Removing all containers, images, and folders."
 
@@ -227,6 +241,9 @@ lab_warn_registry_auth() {
     return
   fi
   if [ "$DO_BUILD" != "true" ]; then
+    return
+  fi
+  if [ "$LAB_OFFLINE" = "1" ]; then
     return
   fi
   if ! command -v podman >/dev/null 2>&1; then
@@ -372,6 +389,10 @@ if [ "$DO_RUN" = "true" ]; then
 fi
 
 if [ "$DO_BUILD" = "true" ]; then
+  if [ "$LAB_OFFLINE" = "1" ]; then
+    lab_log_info "Offline mode enabled: skipping remote pulls (LAB_PULL=never)."
+    lab_verify_base_images
+  fi
   lab_warn_registry_auth
   step "Building images..."
   lab_build_images "$PROJECTS_DIR" "$LAB_PULL_POLICY"
