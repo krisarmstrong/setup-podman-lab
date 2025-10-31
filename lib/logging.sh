@@ -40,7 +40,12 @@ lab_log_msg() {
   printf '[%s] [%s] %s\n' "$ts" "$level" "$msg" >>"$LAB_LOG_FILE"
   case "$level" in
     DEBUG)
-      if [ "$LAB_VERBOSE" = "1" ]; then
+      if [ "$LAB_VERBOSE" = "1" ] && [ "$LAB_QUIET" != "1" ]; then
+        echo "$msg"
+      fi
+      ;;
+    INFO)
+      if [ "$LAB_QUIET" != "1" ]; then
         echo "$msg"
       fi
       ;;

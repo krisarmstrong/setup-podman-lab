@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/version.sh"
 # shellcheck source=lib/templates.sh
 . "$SCRIPT_DIR/lib/templates.sh"
+# shellcheck source=lib/components.sh
+. "$SCRIPT_DIR/lib/components.sh"
 # shellcheck source=lib/runtime.sh
 . "$SCRIPT_DIR/lib/runtime.sh"
 
@@ -27,52 +29,107 @@ LAB_VERBOSE="${LAB_VERBOSE:-0}"
 LAB_LOG_DIR="${LAB_LOG_DIR:-}"
 LAB_LOG_FILE="${LAB_LOG_FILE:-}"
 LAB_PULL_POLICY="${LAB_PULL:-always}"
+LAB_IMAGE_PREFIX="${LAB_IMAGE_PREFIX:-podman-lab}"
+LAB_PROGRESS_ENABLED="${LAB_PROGRESS_ENABLED:-1}"
+LAB_QUIET="${LAB_QUIET:-0}"
+# Remove trailing slash for consistency
+LAB_IMAGE_PREFIX="${LAB_IMAGE_PREFIX%/}"
 
 lab_init_logging "$LAB_ROOT" "$LAB_VERBOSE" "$LAB_LOG_DIR" "$LAB_LOG_FILE"
 lab_log_info "setup-podman-lab.sh version $LAB_VERSION"
 lab_log_info "Detailed output will be written to $LAB_LOG_FILE"
 
-progress_bar() {
-  local current="$1"
-  local total="$2"
-  local width=24
-  local filled=$((current * width / total))
-  local empty=$((width - filled))
-  printf '['
-  if [ "$filled" -gt 0 ]; then
-    printf '#%.0s' $(seq 1 "$filled")
-  fi
-  if [ "$empty" -gt 0 ]; then
-    printf '.%.0s' $(seq 1 "$empty")
-  fi
-  printf ']'
-}
+usage() {
+  cat <<'EOF'
+Usage: setup-podman-lab.sh [light] [teardown] [options]
 
-TOTAL_STEPS=7
+Options:
+  --components LIST   Build/run only the specified comma-separated components.
+  --build-only        Execute build phase only (skip container startup).
+  --run-only          Skip image builds and only start containers.
+  --no-progress       Disable progress bar output.
+  --progress          Enable progress bar output.
+  --quiet             Suppress informational console output (logs still recorded).
+  --verbose           Stream command output and show debug logs.
+  --help              Show this message and exit.
 
-UNAME_OUT="$(uname -s)"
-IS_MAC=false
-IS_LINUX=false
-if [ "$UNAME_OUT" = "Darwin" ]; then IS_MAC=true; fi
-if [ "$UNAME_OUT" = "Linux" ]; then IS_LINUX=true; fi
-if $IS_MAC; then
-  TOTAL_STEPS=$((TOTAL_STEPS + 1))
-fi
-
-STEP=0
-step() {
-  STEP=$((STEP + 1))
-  local bar
-  bar="$(progress_bar "$STEP" "$TOTAL_STEPS")"
-  lab_log_info "==> [$STEP/$TOTAL_STEPS] $bar $1"
+Environment overrides:
+  LAB_COMPONENTS      Default component filter (comma-separated).
+  LAB_PULL            Podman build pull policy (default: always).
+  LAB_IMAGE_PREFIX    Image tag namespace (default: podman-lab).
+  LAB_PROGRESS_ENABLED  Default progress bar toggle (1 enabled, 0 disabled).
+  LAB_VERBOSE         Default verbose toggle (0/1).
+  LAB_QUIET           Default quiet toggle (0/1).
+EOF
 }
 
 LIGHT="false"
-if [ "${1:-}" = "light" ]; then
-  LIGHT="true"
+TEARDOWN="false"
+DO_BUILD="true"
+DO_RUN="true"
+COMPONENT_FILTER="${LAB_COMPONENTS:-}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    light)
+      LIGHT="true"
+      ;;
+    teardown)
+      TEARDOWN="true"
+      ;;
+    --components)
+      if [ $# -lt 2 ]; then
+        lab_log_error "--components requires a comma-separated list."
+        exit 1
+      fi
+      COMPONENT_FILTER="$2"
+      shift
+      ;;
+    --components=*)
+      COMPONENT_FILTER="${1#*=}"
+      ;;
+    --build-only)
+      DO_RUN="false"
+      ;;
+    --run-only)
+      DO_BUILD="false"
+      ;;
+    --no-progress)
+      LAB_PROGRESS_ENABLED=0
+      ;;
+    --progress)
+      LAB_PROGRESS_ENABLED=1
+      ;;
+    --quiet)
+      LAB_QUIET=1
+      LAB_VERBOSE=0
+      ;;
+    --verbose)
+      LAB_VERBOSE=1
+      LAB_QUIET=0
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      lab_log_warn "Unrecognized argument '$1' (ignored)."
+      ;;
+  esac
+  shift
+done
+
+if [ "$DO_BUILD" = "false" ] && [ "$DO_RUN" = "false" ]; then
+  lab_log_error "Both build and run phases are disabled; nothing to do."
+  exit 1
 fi
 
-if [ "${1:-}" = "teardown" ]; then
+lab_components_init "$COMPONENT_FILTER"
+if lab_component_filters_active; then
+  lab_log_info "Component filter active: $(lab_component_filter_string)"
+fi
+
+if [ "$TEARDOWN" = "true" ]; then
   lab_log_info "==> ❌ TEARDOWN MODE: Removing all containers, images, and folders."
 
   podman stop -a >/dev/null 2>&1 || true
@@ -94,6 +151,55 @@ if [ "${1:-}" = "teardown" ]; then
   lab_log_info "==> Cleanup complete. Folders $PROJECTS_DIR and $DATA_DIR removed."
   exit 0
 fi
+
+progress_bar() {
+  local current="$1"
+  local total="$2"
+  local width=24
+  local filled=$((current * width / total))
+  local empty=$((width - filled))
+  printf '['
+  if [ "$filled" -gt 0 ]; then
+    printf '#%.0s' $(seq 1 "$filled")
+  fi
+  if [ "$empty" -gt 0 ]; then
+    printf '.%.0s' $(seq 1 "$empty")
+  fi
+  printf ']'
+}
+
+UNAME_OUT="$(uname -s)"
+IS_MAC=false
+IS_LINUX=false
+if [ "$UNAME_OUT" = "Darwin" ]; then IS_MAC=true; fi
+if [ "$UNAME_OUT" = "Linux" ]; then IS_LINUX=true; fi
+
+TOTAL_STEPS=3
+if $IS_MAC; then
+  TOTAL_STEPS=$((TOTAL_STEPS + 1))
+fi
+TOTAL_STEPS=$((TOTAL_STEPS + 1)) # write container definitions
+if [ "$DO_RUN" = "true" ]; then
+  TOTAL_STEPS=$((TOTAL_STEPS + 1)) # ensure network
+fi
+if [ "$DO_BUILD" = "true" ]; then
+  TOTAL_STEPS=$((TOTAL_STEPS + 1)) # build images
+fi
+if [ "$DO_RUN" = "true" ]; then
+  TOTAL_STEPS=$((TOTAL_STEPS + 1)) # run containers
+fi
+
+STEP=0
+step() {
+  STEP=$((STEP + 1))
+  if [ "$LAB_PROGRESS_ENABLED" = "1" ]; then
+    local bar
+    bar="$(progress_bar "$STEP" "$TOTAL_STEPS")"
+    lab_log_info "==> [$STEP/$TOTAL_STEPS] $bar $1"
+  else
+    lab_log_info "==> [$STEP/$TOTAL_STEPS] $1"
+  fi
+}
 
 step "Detecting platform..."
 if $IS_MAC; then
@@ -185,18 +291,33 @@ step "Writing all container definitions..."
 lab_write_containerfiles "$PROJECTS_DIR" "$DEV_USER" "$DEV_PASS"
 lab_log_info "--> Generated dev and tooling Containerfiles under $PROJECTS_DIR"
 
-step "Ensuring podman 'labnet' network exists..."
-lab_create_labnet_network
+if [ "$DO_RUN" = "true" ]; then
+  step "Ensuring podman 'labnet' network exists..."
+  lab_create_labnet_network
+fi
 
-step "Building images..."
-lab_build_images "$PROJECTS_DIR" "$LAB_PULL_POLICY"
+if [ "$DO_BUILD" = "true" ]; then
+  step "Building images..."
+  lab_build_images "$PROJECTS_DIR" "$LAB_PULL_POLICY"
+else
+  lab_log_info "Skipping image build phase (run-only mode)."
+fi
 
-step "Running core containers and network tools..."
-lab_start_containers "$DATA_DIR" "$DEV_USER" "$LIGHT" "$GVM_PASSWORD"
+if [ "$DO_RUN" = "true" ]; then
+  step "Running core containers and network tools..."
+  lab_start_containers "$DATA_DIR" "$DEV_USER" "$GVM_PASSWORD"
+else
+  lab_log_info "Skipping container startup (build-only mode)."
+fi
 
 IS_MAC_STR="false"
 if $IS_MAC; then
   IS_MAC_STR="true"
 fi
 
-lab_show_summary "$DATA_DIR" "$DEV_USER" "$DEV_PASS" "$GVM_PASSWORD" "$IS_MAC_STR"
+if [ "$DO_RUN" = "true" ]; then
+  lab_show_summary "$DATA_DIR" "$DEV_USER" "$DEV_PASS" "$GVM_PASSWORD" "$IS_MAC_STR"
+else
+  lab_log_info ""
+  lab_log_info "✅ Build phase complete. Images tagged under ${LAB_IMAGE_PREFIX}/<component>:latest"
+fi
