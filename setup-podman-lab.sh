@@ -76,6 +76,7 @@ Environment overrides:
   LAB_IMAGE_PREFIX    Image tag namespace (default: podman-lab).
   LAB_PROGRESS_ENABLED  Default progress bar toggle (1 enabled, 0 disabled).
   LAB_BUILD_CONCURRENCY  Parallel builds (default 2, set 1 to disable).
+  LAB_REGISTRY_MIRROR  Prefix for hostless base images (e.g. registry.example.com/docker).
   LAB_VERBOSE         Default verbose toggle (0/1).
   LAB_QUIET           Default quiet toggle (0/1).
   LAB_LOG_FILE        Override log file path.

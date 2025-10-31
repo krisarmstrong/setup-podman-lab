@@ -58,8 +58,9 @@ lab_write_containerfiles() {
   local dev_pass="$3"
 
   # --- Kali Desktop (VNC) ---
-  cat > "$projects_dir/kali-vnc/Containerfile" <<'EOF'
-FROM kalilinux/kali-rolling
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "kali-vnc")")"
+    cat <<'EOF'
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -81,16 +82,19 @@ RUN mkdir -p /home/kali/.vnc && \
 EXPOSE 5901
 CMD ["sh", "-c", "vncserver :1 -geometry 1280x800 -depth 24 && tail -F /home/kali/.vnc/*.log"]
 EOF
+  } > "$projects_dir/kali-vnc/Containerfile"
 
   # --- PDF Generator ---
-  cat > "$projects_dir/pdf-builder/Containerfile" <<'EOF'
-FROM python:3.12-slim
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "pdf-builder")")"
+    cat <<'EOF'
 RUN pip install reportlab
 WORKDIR /work
 VOLUME ["/out"]
 COPY floorplan_generator.py /work/floorplan_generator.py
 CMD ["python", "floorplan_generator.py", "/out"]
 EOF
+  } > "$projects_dir/pdf-builder/Containerfile"
 
   cat > "$projects_dir/pdf-builder/floorplan_generator.py" <<'EOF'
 from reportlab.lib.pagesizes import landscape, letter
@@ -138,7 +142,7 @@ EOF
 
   # --- Dev Containers (generated) ---
   cat > "$projects_dir/ubuntu-dev/Containerfile" <<EOF
-FROM ubuntu:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "ubuntu-dev")")
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y build-essential curl git sudo pkg-config ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
 $(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
@@ -148,7 +152,7 @@ CMD ["bash"]
 EOF
 
   cat > "$projects_dir/c-dev/Containerfile" <<EOF
-FROM ubuntu:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "c-dev")")
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y build-essential gdb clang make cmake pkg-config git sudo && apt-get clean && rm -rf /var/lib/apt/lists/*
 $(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
@@ -158,7 +162,7 @@ CMD ["bash"]
 EOF
 
   cat > "$projects_dir/go-dev/Containerfile" <<EOF
-FROM golang:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "go-dev")")
 $(lab_create_user_cmd "debian" "$dev_user" "$dev_pass")
 USER $dev_user
 WORKDIR /home/$dev_user/app
@@ -166,7 +170,7 @@ CMD ["bash"]
 EOF
 
   cat > "$projects_dir/python-dev/Containerfile" <<EOF
-FROM python:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "python-dev")")
 $(lab_create_user_cmd "debian" "$dev_user" "$dev_pass")
 USER $dev_user
 WORKDIR /home/$dev_user
@@ -174,7 +178,7 @@ CMD ["bash"]
 EOF
 
   cat > "$projects_dir/node-dev/Containerfile" <<EOF
-FROM node:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "node-dev")")
 $(lab_create_user_cmd "debian" "$dev_user" "$dev_pass")
 USER $dev_user
 WORKDIR /home/$dev_user/app
@@ -182,7 +186,7 @@ CMD ["bash"]
 EOF
 
   cat > "$projects_dir/fedora-dev/Containerfile" <<EOF
-FROM fedora:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "fedora-dev")")
 RUN dnf -y update && dnf -y install @development-tools sudo git curl && dnf clean all
 $(lab_create_user_cmd "fedora" "$dev_user" "$dev_pass")
 USER $dev_user
@@ -191,7 +195,7 @@ CMD ["bash"]
 EOF
 
   cat > "$projects_dir/alpine-tools/Containerfile" <<EOF
-FROM alpine:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "alpine-tools")")
 RUN apk update && apk add git curl wget openssh bash sudo shadow
 RUN adduser -D -s /bin/bash $dev_user && echo '$dev_user:$dev_pass' | chpasswd && usermod -aG wheel $dev_user
 USER $dev_user
@@ -200,8 +204,9 @@ CMD ["bash"]
 EOF
 
   # --- Networking / Security Containers ---
-  cat > "$projects_dir/nmap-tools/Containerfile" <<'EOF'
-FROM debian:bookworm-slim
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "nmap-tools")")"
+    cat <<'EOF'
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends nmap ca-certificates \
@@ -211,9 +216,10 @@ USER root
 WORKDIR /
 CMD ["nmap"]
 EOF
+  } > "$projects_dir/nmap-tools/Containerfile"
 
   cat > "$projects_dir/packet-analyzer/Containerfile" <<EOF
-FROM ubuntu:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "packet-analyzer")")
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y tshark sudo && apt-get clean && rm -rf /var/lib/apt/lists/*
 $(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
@@ -222,13 +228,15 @@ WORKDIR /home/$dev_user/captures
 CMD ["bash"]
 EOF
 
-  cat > "$projects_dir/vulnerability-scanner/Containerfile" <<'EOF'
-FROM mikesplain/openvas:latest
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "vulnerability-scanner")")"
+    cat <<'EOF'
 EXPOSE 443
 EOF
+  } > "$projects_dir/vulnerability-scanner/Containerfile"
 
   cat > "$projects_dir/iperf-tools/Containerfile" <<EOF
-FROM ubuntu:latest
+FROM $(lab_resolve_base "$(lab_base_image_for "iperf-tools")")
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y iperf iperf3 net-tools curl && apt-get clean && rm -rf /var/lib/apt/lists/*
 $(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
@@ -237,26 +245,31 @@ WORKDIR /home/$dev_user
 CMD ["bash"]
 EOF
 
-  cat > "$projects_dir/http-test/Containerfile" <<'EOF'
-FROM python:3.12-slim
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "http-test")")"
+    cat <<'EOF'
 WORKDIR /srv
 RUN mkdir -p /srv/www && echo 'OK' > /srv/www/index.html
 EXPOSE 8000
 CMD ["python", "-m", "http.server", "8000", "--directory", "/srv/www"]
 EOF
+  } > "$projects_dir/http-test/Containerfile"
 
-  cat > "$projects_dir/snmp-demo/Containerfile" <<'EOF'
-FROM debian:stable-slim
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "snmp-demo")")"
+    cat <<'EOF'
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y snmpd && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN printf "agentAddress udp:0.0.0.0:161\nrocommunity public 0.0.0.0/0\nsysLocation Podman-Lab\nsysContact lab-admin@example.com\n" > /etc/snmp/snmpd.conf
 EXPOSE 161/udp
 CMD ["snmpd", "-f", "-Lo"]
 EOF
+  } > "$projects_dir/snmp-demo/Containerfile"
 
   # --- LibreNMS DB (MariaDB) ---
-  cat > "$projects_dir/librenms-db/Containerfile" <<'EOF'
-FROM mariadb:11
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "librenms-db")")"
+    cat <<'EOF'
 ENV MARIADB_ROOT_PASSWORD=librenmsroot
 ENV MARIADB_DATABASE=librenms
 ENV MARIADB_USER=librenms
@@ -264,10 +277,12 @@ ENV MARIADB_PASSWORD=librenmspass
 VOLUME ["/var/lib/mysql"]
 EXPOSE 3306
 EOF
+  } > "$projects_dir/librenms-db/Containerfile"
 
   # --- LibreNMS App ---
-  cat > "$projects_dir/librenms/Containerfile" <<'EOF'
-FROM librenms/librenms:latest
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "librenms")")"
+    cat <<'EOF'
 ENV DB_HOST=librenms-db
 ENV DB_NAME=librenms
 ENV DB_USER=librenms
@@ -279,6 +294,7 @@ VOLUME ["/data"]
 EXPOSE 8000
 CMD ["/init"]
 EOF
+  } > "$projects_dir/librenms/Containerfile"
 }
 lab_base_image_for() {
   case "$1" in
@@ -301,4 +317,39 @@ lab_base_image_for() {
     snmp-demo) printf 'debian:stable-slim' ;;
     *) printf '' ;;
   esac
+}
+
+lab_resolve_base() {
+  local image="$1"
+  local mirror="${LAB_REGISTRY_MIRROR:-}"
+  if [ -z "$mirror" ]; then
+    printf '%s' "$image"
+    return
+  fi
+
+  local prefix=""
+  local remainder="$image"
+  local has_host=0
+
+  if [[ "$image" == */* ]]; then
+    prefix="${image%%/*}"
+    remainder="${image#*/}"
+    if [[ "$prefix" == *.* || "$prefix" == *:* || "$prefix" == "localhost" ]]; then
+      has_host=1
+    fi
+  else
+    prefix=""
+    remainder="$image"
+  fi
+
+  if [ $has_host -eq 1 ]; then
+    printf '%s' "$image"
+    return
+  fi
+
+  if [ -n "$prefix" ]; then
+    printf '%s/%s/%s' "${mirror%/}" "$prefix" "$remainder"
+  else
+    printf '%s/library/%s' "${mirror%/}" "$remainder"
+  fi
 }

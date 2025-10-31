@@ -44,11 +44,12 @@ lab_verify_base_images() {
     if ! lab_component_enabled_quiet "$component"; then
       continue
     fi
-    local base_image
-    base_image="$(lab_base_image_for "$component")"
-    if [ -z "$base_image" ]; then
+    local base_image raw_image
+    raw_image="$(lab_base_image_for "$component")"
+    if [ -z "$raw_image" ]; then
       continue
     fi
+    base_image="$(lab_resolve_base "$raw_image")"
     if ! podman image exists "$base_image" >/dev/null 2>&1; then
       missing+=("$base_image")
     fi

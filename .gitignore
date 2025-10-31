@@ -1,0 +1,6 @@
+# Generated lab artifacts (created under repo if bootstrap paths are customized)
+PodmanProjects/
+PodmanData/
+
+# OS noise
+.DS_Store

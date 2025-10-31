@@ -70,6 +70,8 @@ No Docker Desktop tax. No manual setup. No excuses.
 >
 > First-time pull? Avoid Docker Hub throttling by authenticating once:  
 > `podman login docker.io`
+>
+> Have a registry mirror? Set `LAB_REGISTRY_MIRROR="mirror.example.com/docker"` and the lab will rewrite hostless base images automatically (official library images gain the `/library` prefix for you).
 
 ---
 
@@ -111,6 +113,7 @@ No Docker Desktop tax. No manual setup. No excuses.
 | `podman exec -it packet-analyzer bash` | Run Wireshark CLI (tshark) |
 | `podman logs librenms` | Check LibreNMS startup logs |
 | `podman machine inspect` | Show machine config (Mac) |
+| `scripts/verify-lab.sh` | Smoke-test key services (kali-vnc, http-test, librenms, GVM) |
 
 ---
 
@@ -222,12 +225,23 @@ Pre-pull the base images you need (e.g. `podman pull ubuntu:latest`), then run w
 | `LAB_IMAGE_PREFIX` | Namespace for built images (default `podman-lab`). |
 | `LAB_PROGRESS_ENABLED` | Set `0` to disable the progress bar globally. |
 | `LAB_BUILD_CONCURRENCY` | Parallel podman builds (default 2; set 1 to disable). |
+| `LAB_REGISTRY_MIRROR` | Prefix for hostless images (e.g. `registry.example.com/docker`). |
 | `LAB_VERBOSE` / `LAB_QUIET` | Default logging verbosity toggles. |
 | `LAB_LOG_FILE` | Target log file path (defaults under `$PODMAN_LAB_ROOT/logs`). |
 | `LAB_SKIP_REGISTRY_CHECK` | Set `1` to suppress the Docker Hub login warning. |
 | `LAB_OFFLINE_MODE` | Set `1` to require pre-pulled base images (`LAB_PULL` forced to `never`). |
 
 Detailed logs for every run live in `$(PODMAN_LAB_ROOT:-$HOME)/logs/setup-podman-lab-<timestamp>.log`.
+
+### Quality-of-life add-ons
+
+| File | Purpose |
+|------|---------|
+| `completions/setup-podman-lab.bash` | Bash completion for commands, profiles, and flags. Source it in your shell (`source completions/setup-podman-lab.bash`) for tab completion. |
+| `completions/setup-podman-lab.zsh` | zsh completion. Add `fpath+=(path/to/completions)` and `autoload -Uz compinit; compinit`. |
+| `completions/setup-podman-lab.fish` | fish completion. Copy into `~/.config/fish/completions/`. |
+| `scripts/verify-lab.sh` | Basic smoke test. Runs `podman ps`, checks the VNC/http/LibreNMS/GVM containers, and exits non-zero on failure. |
+| `scripts/verify-openvas.sh` | Targeted GVM health check (`podman exec vulnerability-scanner gvm-cli ...`). |
 
 ---
 
