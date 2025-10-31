@@ -17,6 +17,10 @@ set -e
 DEV_USER="dev"
 DEV_PASS="dev"   # TODO: change this for real use!
 
+LAB_ROOT="${PODMAN_LAB_ROOT:-$HOME}"
+PROJECTS_DIR="$LAB_ROOT/PodmanProjects"
+DATA_DIR="$LAB_ROOT/PodmanData"
+
 # ---------------------------
 # TEARDOWN MODE
 # ---------------------------
@@ -28,24 +32,47 @@ if [ "$1" = "teardown" ]; then
 
   IMGS=$(podman images -q | uniq)
   if [ -n "$IMGS" ]; then
-    podman rmi -f $IMGS >/dev/null 2>&1 || true
+    printf '%s\n' "$IMGS" | while IFS= read -r img; do
+      [ -n "$img" ] || continue
+      podman rmi -f "$img" >/dev/null 2>&1 || true
+    done
   fi
 
   podman machine stop >/dev/null 2>&1 || true
   podman machine rm -f >/dev/null 2>&1 || true
 
-  rm -rf ~/PodmanProjects ~/PodmanData
+  rm -rf "$PROJECTS_DIR" "$DATA_DIR"
 
-  echo "==> Cleanup complete. Folders ~/PodmanProjects and ~/PodmanData removed."
+  echo "==> Cleanup complete. Folders $PROJECTS_DIR and $DATA_DIR removed."
   exit 0
 fi
 
-echo "==> [0/18] Detecting platform..."
 UNAME_OUT="$(uname -s)"
 IS_MAC=false
 IS_LINUX=false
 if [ "$UNAME_OUT" = "Darwin" ]; then IS_MAC=true; fi
 if [ "$UNAME_OUT" = "Linux" ]; then IS_LINUX=true; fi
+
+TOTAL_STEPS=7
+if $IS_MAC; then
+  TOTAL_STEPS=$((TOTAL_STEPS + 1))
+fi
+
+STEP=0
+step() {
+  STEP=$((STEP + 1))
+  echo "==> [$STEP/$TOTAL_STEPS] $1"
+}
+
+PLATFORM="unknown"
+if $IS_MAC; then
+  PLATFORM="macOS"
+elif $IS_LINUX; then
+  PLATFORM="Linux"
+fi
+
+step "Detecting platform..."
+echo "Detected $PLATFORM"
 
 LIGHT=false
 if [ "$1" = "light" ]; then
@@ -56,11 +83,27 @@ fi
 #######################################
 # Install Podman if missing
 #######################################
+step "Verifying Podman installation..."
 if ! command -v podman >/dev/null 2>&1; then
   echo "==> Podman not found, installing..."
   if $IS_MAC; then
     if ! command -v brew >/dev/null 2>&1; then
-      echo "Homebrew not found. Installing Homebrew first..."
+      echo "Homebrew not found. Network access is required to install it."
+      if [ -z "${AUTO_INSTALL_HOMEBREW:-}" ]; then
+        if [ -t 0 ]; then
+          read -rp "Proceed with Homebrew install now? [y/N]: " reply
+          case "$reply" in
+            [Yy]* ) ;;
+            * )
+              echo "Skipping automatic Homebrew install. Install it manually, set AUTO_INSTALL_HOMEBREW=1, or rerun when online."
+              exit 1
+              ;;
+          esac
+        else
+          echo "Set AUTO_INSTALL_HOMEBREW=1 to auto-install or install manually before rerunning."
+          exit 1
+        fi
+      fi
       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
       if [ -d "/opt/homebrew/bin" ]; then
         export PATH="/opt/homebrew/bin:$PATH"
@@ -91,38 +134,42 @@ create_user_cmd() {
   fi
 }
 
+ensure_container_absent() {
+  local name="$1"
+  if podman container exists "$name" >/dev/null 2>&1; then
+    podman rm -f "$name" >/dev/null
+  fi
+}
+
 #######################################
 # Folder Layout
 #######################################
-echo "==> [1/18] Creating clean host folders..."
+step "Creating clean host folders..."
+echo "Using lab root: $LAB_ROOT"
 mkdir -p \
-  ~/PodmanProjects/{kali-vnc,pdf-builder,ubuntu-dev,fedora-dev,go-dev,python-dev,c-dev,node-dev,alpine-tools,nmap-tools,packet-analyzer,vulnerability-scanner,iperf-tools,http-test,librenms,librenms-db} \
-  ~/PodmanData/{kali-home,pdf-out,ubuntu-home,fedora-home,go-home,python-home,c-home,node-home,alpine-home,network-out,vulnerability-home,iperf-out,librenms-data,librenms-db}
+  "$PROJECTS_DIR"/{kali-vnc,pdf-builder,ubuntu-dev,fedora-dev,go-dev,python-dev,c-dev,node-dev,alpine-tools,nmap-tools,packet-analyzer,vulnerability-scanner,iperf-tools,http-test,librenms,librenms-db,snmp-demo} \
+  "$DATA_DIR"/{kali-home,pdf-out,ubuntu-home,fedora-home,go-home,python-home,c-home,node-home,alpine-home,network-out,vulnerability-home,iperf-out,librenms-data,librenms-db}
 
 #######################################
-# Podman Machine Setup
+# Podman Machine Setup (macOS only)
 #######################################
-echo "==> [2/18] Resetting Podman machine to a clean state..."
-if podman machine list 2>/dev/null | grep -q 'podman-machine-default'; then
-  podman machine stop >/dev/null 2>&1 || true
-  podman machine rm -f >/dev/null 2>&1 || true
-fi
-
-# init machine
-podman machine init
-
-# macOS: give it some actual resources
 if $IS_MAC; then
-  podman machine set --cpus 4 --memory 4096 --disk-size 40
-fi
+  step "Resetting Podman machine to a clean state..."
+  if podman machine list 2>/dev/null | grep -q 'podman-machine-default'; then
+    podman machine stop >/dev/null 2>&1 || true
+    podman machine rm -f >/dev/null 2>&1 || true
+  fi
 
-# rootful for all
-podman machine set --rootful
-podman machine start
+  # init machine
+  INIT_DISK_SIZE="${PODMAN_MACHINE_DISK_SIZE:-40}"
+  echo "Initializing Podman machine with 4 CPUs, 4GB RAM, and ${INIT_DISK_SIZE}GB disk..."
+  podman machine init --cpus 4 --memory 4096 --disk-size "$INIT_DISK_SIZE"
 
-# macOS helper
-if $IS_MAC; then
-  echo "==> [3/18] Installing Podman mac helper (if available)..."
+  podman machine set --rootful
+  podman machine start
+
+  # macOS helper
+  echo "==> Installing Podman mac helper (if available)..."
   HELPER_PATH="$(brew --prefix podman)/bin/podman-mac-helper"
   if [ -x "$HELPER_PATH" ]; then
     sudo "$HELPER_PATH" install
@@ -132,15 +179,17 @@ if $IS_MAC; then
   else
     echo "⚠️  podman-mac-helper not found under Homebrew path, skipping helper install."
   fi
+else
+  echo "==> Podman machine setup not required on this platform; using native Podman."
 fi
 
 #######################################
 # Containerfiles
 #######################################
-echo "==> [4/18] Writing all container definitions..."
+step "Writing all container definitions..."
 
 # --- Kali Desktop (VNC) ---
-cat > ~/PodmanProjects/kali-vnc/Containerfile <<'EOF'
+cat > "$PROJECTS_DIR/kali-vnc/Containerfile" <<'EOF'
 FROM kalilinux/kali-rolling
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
@@ -165,7 +214,7 @@ CMD ["sh", "-c", "vncserver :1 -geometry 1280x800 -depth 24 && tail -F /home/kal
 EOF
 
 # --- PDF Generator ---
-cat > ~/PodmanProjects/pdf-builder/Containerfile <<'EOF'
+cat > "$PROJECTS_DIR/pdf-builder/Containerfile" <<'EOF'
 FROM python:3.12-slim
 RUN pip install reportlab
 WORKDIR /work
@@ -174,7 +223,7 @@ COPY floorplan_generator.py /work/floorplan_generator.py
 CMD ["python", "floorplan_generator.py", "/out"]
 EOF
 
-cat > ~/PodmanProjects/pdf-builder/floorplan_generator.py <<'EOF'
+cat > "$PROJECTS_DIR/pdf-builder/floorplan_generator.py" <<'EOF'
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -219,99 +268,126 @@ for cat, layouts in series.items():
 EOF
 
 # --- Dev Containers (generated) ---
-declare -A CONTAINERS
-
-CONTAINERS["ubuntu-dev"]="FROM ubuntu:latest
+cat > "$PROJECTS_DIR/ubuntu-dev/Containerfile" <<EOF
+FROM ubuntu:latest
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y build-essential curl git sudo pkg-config ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
 $(create_user_cmd "ubuntu")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["c-dev"]="FROM ubuntu:latest
+cat > "$PROJECTS_DIR/c-dev/Containerfile" <<EOF
+FROM ubuntu:latest
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y build-essential gdb clang make cmake pkg-config git sudo && apt-get clean && rm -rf /var/lib/apt/lists/*
 $(create_user_cmd "ubuntu")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["go-dev"]="FROM golang:latest
+cat > "$PROJECTS_DIR/go-dev/Containerfile" <<EOF
+FROM golang:latest
 $(create_user_cmd "debian")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER/app
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["python-dev"]="FROM python:latest
+cat > "$PROJECTS_DIR/python-dev/Containerfile" <<EOF
+FROM python:latest
 $(create_user_cmd "debian")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["node-dev"]="FROM node:latest
+cat > "$PROJECTS_DIR/node-dev/Containerfile" <<EOF
+FROM node:latest
 $(create_user_cmd "debian")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER/app
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["fedora-dev"]="FROM fedora:latest
+cat > "$PROJECTS_DIR/fedora-dev/Containerfile" <<EOF
+FROM fedora:latest
 RUN dnf -y update && dnf -y install @development-tools sudo git curl && dnf clean all
 $(create_user_cmd "fedora")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["alpine-tools"]="FROM alpine:latest
+cat > "$PROJECTS_DIR/alpine-tools/Containerfile" <<EOF
+FROM alpine:latest
 RUN apk update && apk add git curl wget openssh bash sudo shadow
 RUN adduser -D -s /bin/bash $DEV_USER && echo '$DEV_USER:$DEV_PASS' | chpasswd && usermod -aG wheel $DEV_USER
 USER $DEV_USER
 WORKDIR /home/$DEV_USER
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
 # --- Networking / Security Containers ---
-CONTAINERS["nmap-tools"]="FROM nmap/nmap:latest
+cat > "$PROJECTS_DIR/nmap-tools/Containerfile" <<'EOF'
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends nmap ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 USER root
 WORKDIR /
-CMD [\"nmap\"]"
+CMD ["nmap"]
+EOF
 
-CONTAINERS["packet-analyzer"]="FROM ubuntu:latest
+cat > "$PROJECTS_DIR/packet-analyzer/Containerfile" <<EOF
+FROM ubuntu:latest
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y tshark sudo && apt-get clean && rm -rf /var/lib/apt/lists/*
-$(create_user_cmd \"ubuntu\")
+$(create_user_cmd "ubuntu")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER/captures
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["vulnerability-scanner"]="FROM immauss/gvm-base:latest
-USER gvm
-EXPOSE 4000
-CMD [\"/start-gvm\"]"
+cat > "$PROJECTS_DIR/vulnerability-scanner/Containerfile" <<'EOF'
+FROM greenbone/gvm:stable
+# Expose GSA on default HTTPS port; runtime mapping keeps external port at 4000.
+EXPOSE 9392
+EOF
 
-CONTAINERS["iperf-tools"]="FROM ubuntu:latest
+cat > "$PROJECTS_DIR/iperf-tools/Containerfile" <<EOF
+FROM ubuntu:latest
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y iperf iperf3 net-tools curl && apt-get clean && rm -rf /var/lib/apt/lists/*
-$(create_user_cmd \"ubuntu\")
+$(create_user_cmd "ubuntu")
 USER $DEV_USER
 WORKDIR /home/$DEV_USER
-CMD [\"bash\"]"
+CMD ["bash"]
+EOF
 
-CONTAINERS["http-test"]="FROM python:3.12-slim
+cat > "$PROJECTS_DIR/http-test/Containerfile" <<'EOF'
+FROM python:3.12-slim
 WORKDIR /srv
 RUN mkdir -p /srv/www && echo 'OK' > /srv/www/index.html
 EXPOSE 8000
-CMD [\"python\", \"-m\", \"http.server\", \"8000\", \"--directory\", \"/srv/www\"]"
+CMD ["python", "-m", "http.server", "8000", "--directory", "/srv/www"]
+EOF
 
-CONTAINERS["snmp-demo"]='FROM debian:stable-slim
+cat > "$PROJECTS_DIR/snmp-demo/Containerfile" <<'EOF'
+FROM debian:stable-slim
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y snmpd && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN printf "agentAddress udp:0.0.0.0:161\nrocommunity public 0.0.0.0/0\nsysLocation Podman-Lab\nsysContact lab-admin@example.com\n" > /etc/snmp/snmpd.conf
 EXPOSE 161/udp
 CMD ["snmpd", "-f", "-Lo"]
-'
+EOF
 
 # --- LibreNMS DB (MariaDB) ---
-cat > ~/PodmanProjects/librenms-db/Containerfile <<'EOF'
+cat > "$PROJECTS_DIR/librenms-db/Containerfile" <<'EOF'
 FROM mariadb:11
 ENV MARIADB_ROOT_PASSWORD=librenmsroot
 ENV MARIADB_DATABASE=librenms
@@ -322,7 +398,7 @@ EXPOSE 3306
 EOF
 
 # --- LibreNMS App ---
-cat > ~/PodmanProjects/librenms/Containerfile <<'EOF'
+cat > "$PROJECTS_DIR/librenms/Containerfile" <<'EOF'
 FROM librenms/librenms:latest
 ENV DB_HOST=librenms-db
 ENV DB_NAME=librenms
@@ -337,15 +413,12 @@ CMD ["/init"]
 EOF
 
 # write generated containerfiles
-for name in "${!CONTAINERS[@]}"; do
-  echo "--> Writing ${name} Containerfile..."
-  echo -e "${CONTAINERS[$name]}" > ~/PodmanProjects/$name/Containerfile
-done
+echo "--> Generated dev and tooling Containerfiles under $PROJECTS_DIR"
 
 #######################################
 # Network for LibreNMS stack
 #######################################
-echo "==> [5/18] Ensuring podman 'labnet' network exists..."
+step "Ensuring podman 'labnet' network exists..."
 if ! podman network exists labnet >/dev/null 2>&1; then
   podman network create labnet
 fi
@@ -353,8 +426,9 @@ fi
 #######################################
 # Build & Run
 #######################################
-echo "==> [6/18] Building images..."
-for d in ~/PodmanProjects/*; do
+step "Building images..."
+for d in "$PROJECTS_DIR"/*; do
+  [ -d "$d" ] || continue
   cd "$d"
   img=$(basename "$d" | tr '[:upper:]' '[:lower:]')
   echo "--> Building image: $img ..."
@@ -365,58 +439,75 @@ for d in ~/PodmanProjects/*; do
   fi
 done
 
-echo "==> [7/18] Running core containers and network tools..."
+step "Running core containers and network tools..."
 
 # General Utilities
-podman run -d --name kali-vnc -p 5901:5901 -v ~/PodmanData/kali-home:/home/kali kali-vnc
-podman run --rm -v ~/PodmanData/pdf-out:/out pdf-builder
+ensure_container_absent "kali-vnc"
+podman run -d --name kali-vnc -p 5901:5901 -v "$DATA_DIR/kali-home:/home/kali" kali-vnc
+podman run --rm -v "$DATA_DIR/pdf-out:/out" pdf-builder
 
 # Dev Shells
 if ! $LIGHT; then
-  podman run -d --name ubuntu-dev      -v ~/PodmanData/ubuntu-home:/home/$DEV_USER ubuntu-dev
-  podman run -d --name fedora-dev      -v ~/PodmanData/fedora-home:/home/$DEV_USER fedora-dev
-  podman run -d --name go-dev          -v ~/PodmanData/go-home:/home/$DEV_USER/app go-dev
-  podman run -d --name python-dev      -v ~/PodmanData/python-home:/home/$DEV_USER python-dev
-  podman run -d --name c-dev           -v ~/PodmanData/c-home:/home/$DEV_USER c-dev
-  podman run -d --name node-dev        -v ~/PodmanData/node-home:/home/$DEV_USER/app node-dev
-  podman run -d --name alpine-tools    -v ~/PodmanData/alpine-home:/home/$DEV_USER alpine-tools
+  ensure_container_absent "ubuntu-dev"
+  podman run -d --name ubuntu-dev      -v "$DATA_DIR/ubuntu-home:/home/$DEV_USER" ubuntu-dev
+  ensure_container_absent "fedora-dev"
+  podman run -d --name fedora-dev      -v "$DATA_DIR/fedora-home:/home/$DEV_USER" fedora-dev
+  ensure_container_absent "go-dev"
+  podman run -d --name go-dev          -v "$DATA_DIR/go-home:/home/$DEV_USER/app" go-dev
+  ensure_container_absent "python-dev"
+  podman run -d --name python-dev      -v "$DATA_DIR/python-home:/home/$DEV_USER" python-dev
+  ensure_container_absent "c-dev"
+  podman run -d --name c-dev           -v "$DATA_DIR/c-home:/home/$DEV_USER" c-dev
+  ensure_container_absent "node-dev"
+  podman run -d --name node-dev        -v "$DATA_DIR/node-home:/home/$DEV_USER/app" node-dev
+  ensure_container_absent "alpine-tools"
+  podman run -d --name alpine-tools    -v "$DATA_DIR/alpine-home:/home/$DEV_USER" alpine-tools
 else
-  podman run -d --name ubuntu-dev      -v ~/PodmanData/ubuntu-home:/home/$DEV_USER ubuntu-dev
+  ensure_container_absent "ubuntu-dev"
+  podman run -d --name ubuntu-dev      -v "$DATA_DIR/ubuntu-home:/home/$DEV_USER" ubuntu-dev
 fi
 
 # Networking / Security
+ensure_container_absent "nmap-tools"
 podman run -d --name nmap-tools nmap-tools
 
+ensure_container_absent "packet-analyzer"
 podman run -d --name packet-analyzer \
   --net=host \
   --cap-add=NET_ADMIN --cap-add=NET_RAW \
-  -v ~/PodmanData/network-out:/home/$DEV_USER/captures \
+  -v "$DATA_DIR/network-out:/home/$DEV_USER/captures" \
   packet-analyzer
 
+ensure_container_absent "iperf-tools"
 podman run -d --name iperf-tools \
-  -v ~/PodmanData/iperf-out:/home/$DEV_USER \
+  -v "$DATA_DIR/iperf-out:/home/$DEV_USER" \
   iperf-tools
 
+ensure_container_absent "vulnerability-scanner"
 podman run -d --name vulnerability-scanner \
-  -p 4000:4000 \
-  -v ~/PodmanData/vulnerability-home:/home/gvm \
+  -p 4000:9392 \
+  -v "$DATA_DIR/vulnerability-home:/data" \
   vulnerability-scanner
 
+ensure_container_absent "http-test"
 podman run -d --name http-test -p 8000:8000 http-test
 
 # LibreNMS stack
+ensure_container_absent "librenms-db"
 podman run -d --name librenms-db \
   --network labnet \
-  -v ~/PodmanData/librenms-db:/var/lib/mysql \
+  -v "$DATA_DIR/librenms-db:/var/lib/mysql" \
   librenms-db
 
+ensure_container_absent "librenms"
 podman run -d --name librenms \
   --network labnet \
   -p 8001:8000 \
-  -v ~/PodmanData/librenms-data:/data \
+  -v "$DATA_DIR/librenms-data:/data" \
   librenms
 
 # SNMP demo target for LibreNMS
+ensure_container_absent "snmp-demo"
 podman run -d --name snmp-demo \
   --network labnet \
   snmp-demo
@@ -439,7 +530,7 @@ echo "  User: kali   Pass: kali"
 echo "  VNC password: kali"
 echo ""
 echo "📄 Floor plan PDFs:"
-echo "  ~/PodmanData/pdf-out/"
+echo "  $DATA_DIR/pdf-out/"
 echo ""
 echo "💻 Dev Containers:"
 echo "  podman exec -it ubuntu-dev bash"
@@ -454,7 +545,7 @@ echo "🌐 Net/Sec:"
 echo "  podman exec -it nmap-tools nmap -v <target>"
 echo "  podman exec -it packet-analyzer bash   # sudo tshark -i eth0"
 echo "  podman exec -it iperf-tools bash       # iperf3 -s / -c"
-echo "  GVM: http://localhost:4000  (first run can take a few mins)"
+echo "  GVM: https://localhost:4000  (proxied to container port 9392; first run can take a few mins)"
 echo ""
 echo "🧪 HTTP Test:"
 echo "  http://localhost:8000  -> 'OK'"
