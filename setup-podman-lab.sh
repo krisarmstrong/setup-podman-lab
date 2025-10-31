@@ -354,8 +354,7 @@ CMD ["bash"]
 EOF
 
 cat > "$PROJECTS_DIR/vulnerability-scanner/Containerfile" <<'EOF'
-FROM greenbone/gvm:stable
-# Expose GSA on default HTTPS port; runtime mapping keeps external port at 4000.
+FROM ghcr.io/immauss/openvas:latest
 EXPOSE 9392
 EOF
 
