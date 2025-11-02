@@ -17,14 +17,16 @@ function __fish_setup_podman_lab_needs_command
 end
 
 set -l profiles all dev net sec monitor infra
-set -l options --components --build-only --run-only --profile --no-progress --progress --quiet --verbose --help
+set -l options --components --build-only --run-only --profile --lan-mode --lan-interface --no-progress --progress --quiet --verbose --help
 
-complete -c setup-podman-lab.sh -n '__fish_setup_podman_lab_needs_command' -f -a 'light teardown rebuild rerun'
+complete -c setup-podman-lab.sh -n '__fish_setup_podman_lab_needs_command' -f -a 'light teardown rebuild rerun lan-enable lan-disable lan-status'
 complete -c setup-podman-lab.sh -s h -l help -d 'Show help'
 complete -c setup-podman-lab.sh -l profile -a "$profiles" -d 'Select component profile'
 complete -c setup-podman-lab.sh -l components -d 'Comma-separated component list'
 complete -c setup-podman-lab.sh -l build-only -d 'Build images only'
 complete -c setup-podman-lab.sh -l run-only -d 'Run containers only'
+complete -c setup-podman-lab.sh -l lan-mode -d 'Enable LAN networking'
+complete -c setup-podman-lab.sh -l lan-interface -d 'Physical network interface for LAN'
 complete -c setup-podman-lab.sh -l no-progress -d 'Disable progress bar'
 complete -c setup-podman-lab.sh -l progress -d 'Enable progress bar'
 complete -c setup-podman-lab.sh -l quiet -d 'Suppress info logs'

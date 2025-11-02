@@ -13,6 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/components.sh"
 # shellcheck source=lib/runtime.sh
 . "$SCRIPT_DIR/lib/runtime.sh"
+# shellcheck source=lib/networking.sh
+. "$SCRIPT_DIR/lib/networking.sh"
 
 LAB_VERSION_FALLBACK="0.5.0"
 LAB_VERSION="$(lab_detect_version "$SCRIPT_DIR" "$LAB_VERSION_FALLBACK")"
@@ -57,26 +59,54 @@ Commands:
   teardown         Stop containers, remove images, and delete lab folders
   rebuild TARGET   Build images for the specified component list/profile
   rerun TARGET     Run containers for the specified component list/profile
+  lan-enable TARGET  Connect container(s) to LAN network (requires --lan-interface)
+                     Use 'all' to connect all running containers
+  lan-disable TARGET Disconnect container(s) from LAN network
+                     Use 'all' to disconnect all running containers
+  lan-status       Show LAN network status and connected containers
 
 Options:
   --components LIST   Build/run only the specified comma-separated components.
   --build-only        Execute build phase only (skip container startup).
   --run-only          Skip image builds and only start containers.
-  --profile NAME      Use a predefined component profile (all, dev, net, sec, monitor).
+  --profile NAME      Use a predefined component profile (all, dev, net, sec, monitor, infra).
+  --lan-mode          Enable LAN networking for all containers at startup.
+  --lan-interface IF  Specify the physical network interface for LAN mode (e.g., en0, eth0).
   --no-progress       Disable progress bar output.
   --progress          Enable progress bar output.
   --quiet             Suppress informational console output (logs still recorded).
   --verbose           Stream command output and show debug logs.
   --help              Show this message and exit.
 
+LAN Networking Examples:
+  # Connect specific containers to LAN
+  ./setup-podman-lab.sh lan-enable network-capture --lan-interface en0
+  ./setup-podman-lab.sh lan-enable http-server --lan-interface en0
+
+  # Connect all running containers to LAN
+  ./setup-podman-lab.sh lan-enable all --lan-interface en0
+
+  # Start lab with LAN enabled from the beginning
+  ./setup-podman-lab.sh --lan-mode --lan-interface en0
+
+  # Check LAN status
+  ./setup-podman-lab.sh lan-status
+
+  # Disconnect from LAN
+  ./setup-podman-lab.sh lan-disable network-capture
+  ./setup-podman-lab.sh lan-disable all
+
 Environment overrides:
   LAB_COMPONENTS      Default component filter (comma-separated).
-  LAB_PROFILE         Default profile to apply (all, dev, net, sec, monitor).
+  LAB_PROFILE         Default profile to apply (all, dev, net, sec, monitor, infra).
+  LAB_LAN_MODE        Enable LAN mode (0/1).
+  LAB_LAN_INTERFACE   Default LAN interface (e.g., en0, eth0).
   LAB_PULL            Podman build pull policy (default: if-needed).
   LAB_IMAGE_PREFIX    Image tag namespace (default: podman-lab).
   LAB_PROGRESS_ENABLED  Default progress bar toggle (1 enabled, 0 disabled).
   LAB_BUILD_CONCURRENCY  Parallel builds (default 2, set 1 to disable).
   LAB_REGISTRY_MIRROR  Prefix for hostless base images (e.g. registry.example.com/docker).
+  LAB_PYTHON_VERSION  Python version for python-dev (default: latest).
   LAB_VERBOSE         Default verbose toggle (0/1).
   LAB_QUIET           Default quiet toggle (0/1).
   LAB_LOG_FILE        Override log file path.
@@ -92,6 +122,8 @@ DO_RUN="true"
 COMPONENT_FILTER="${LAB_COMPONENTS:-}"
 PROFILE="${LAB_PROFILE:-all}"
 TARGET_SPEC=""
+LAN_COMMAND=""
+LAN_TARGET=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -116,6 +148,43 @@ while [ $# -gt 0 ]; do
         TARGET_SPEC="$2"
         shift
       fi
+      ;;
+    lan-enable)
+      LAN_COMMAND="enable"
+      if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+        LAN_TARGET="$2"
+        shift
+      else
+        lab_log_error "lan-enable requires a container name or 'all'"
+        exit 1
+      fi
+      ;;
+    lan-disable)
+      LAN_COMMAND="disable"
+      if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+        LAN_TARGET="$2"
+        shift
+      else
+        lab_log_error "lan-disable requires a container name or 'all'"
+        exit 1
+      fi
+      ;;
+    lan-status)
+      LAN_COMMAND="status"
+      ;;
+    --lan-mode)
+      LAB_LAN_MODE=1
+      ;;
+    --lan-interface)
+      if [ $# -lt 2 ]; then
+        lab_log_error "--lan-interface requires an interface name"
+        exit 1
+      fi
+      LAB_LAN_INTERFACE="$2"
+      shift
+      ;;
+    --lan-interface=*)
+      LAB_LAN_INTERFACE="${1#*=}"
       ;;
     --components)
       if [ $# -lt 2 ]; then
@@ -169,6 +238,42 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# Handle LAN commands first (they don't need build/run logic)
+if [ -n "$LAN_COMMAND" ]; then
+  case "$LAN_COMMAND" in
+    status)
+      lab_lan_show_status
+      exit 0
+      ;;
+    enable)
+      if [ "$LAN_TARGET" = "all" ]; then
+        if [ -z "$LAB_LAN_INTERFACE" ]; then
+          lab_log_error "lan-enable requires --lan-interface to be specified"
+          exit 1
+        fi
+        lab_lan_enable_all "$LAB_LAN_INTERFACE"
+        exit $?
+      else
+        if [ -z "$LAB_LAN_INTERFACE" ]; then
+          lab_log_error "lan-enable requires --lan-interface to be specified"
+          exit 1
+        fi
+        lab_lan_connect_container "$LAN_TARGET" "$LAB_LAN_INTERFACE"
+        exit $?
+      fi
+      ;;
+    disable)
+      if [ "$LAN_TARGET" = "all" ]; then
+        lab_lan_disable_all
+        exit $?
+      else
+        lab_lan_disconnect_container "$LAN_TARGET"
+        exit $?
+      fi
+      ;;
+  esac
+fi
 
 if [ "$DO_BUILD" = "false" ] && [ "$DO_RUN" = "false" ]; then
   lab_log_error "Both build and run phases are disabled; nothing to do."
@@ -404,6 +509,18 @@ fi
 if [ "$DO_RUN" = "true" ]; then
   step "Running core containers and network tools..."
   lab_start_containers "$DATA_DIR" "$DEV_USER" "$GVM_PASSWORD"
+
+  # Enable LAN mode if requested
+  if [ "$LAB_LAN_MODE" = "1" ]; then
+    if [ -z "$LAB_LAN_INTERFACE" ]; then
+      lab_log_warn "LAB_LAN_MODE enabled but LAB_LAN_INTERFACE not specified."
+      lab_log_warn "Skipping LAN setup. Use --lan-interface to specify interface."
+    else
+      lab_log_info ""
+      lab_log_info "==> Enabling LAN mode on interface $LAB_LAN_INTERFACE..."
+      lab_lan_enable_all "$LAB_LAN_INTERFACE"
+    fi
+  fi
 else
   lab_log_info "Skipping container startup (build-only mode)."
 fi
