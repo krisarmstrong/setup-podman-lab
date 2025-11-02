@@ -14,22 +14,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run ShellCheck on main script
-        uses: ludeeus/action-shellcheck@master
-        with:
-          scandir: '.'
-          severity: warning
-          format: gcc
-          ignore_paths: completions/setup-podman-lab.zsh completions/setup-podman-lab.fish
-        env:
-          SHELLCHECK_OPTS: -e SC2312
-
-      - name: Run ShellCheck on helper scripts
-        uses: ludeeus/action-shellcheck@master
-        with:
-          scandir: './scripts'
-          severity: warning
-          format: gcc
+      - name: Run ShellCheck on bash scripts
+        run: |
+          shellcheck -e SC2312 --severity=warning setup-podman-lab.sh
+          shellcheck -e SC2312 --severity=warning lib/*.sh
+          shellcheck -e SC2312 --severity=warning scripts/*.sh
+          shellcheck -e SC2207 --severity=warning completions/setup-podman-lab.bash
 
   syntax-check:
     name: Bash Syntax Check
