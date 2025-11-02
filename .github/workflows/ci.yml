@@ -59,7 +59,7 @@ jobs:
           export PODMAN_LAB_ROOT="${PWD}/lab-tmp"
           export LAB_SKIP_REGISTRY_CHECK=1
           export LAB_OFFLINE_MODE=0
-          ./setup-podman-lab.sh light --build-only --quiet
+          ./setup-podman-lab.sh light --build-only --verbose
         timeout-minutes: 25
 
       - name: Verify generated structure
