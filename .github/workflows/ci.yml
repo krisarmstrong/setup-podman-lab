@@ -20,6 +20,7 @@ jobs:
           scandir: '.'
           severity: warning
           format: gcc
+          ignore_paths: completions/setup-podman-lab.zsh completions/setup-podman-lab.fish
         env:
           SHELLCHECK_OPTS: -e SC2312
 
