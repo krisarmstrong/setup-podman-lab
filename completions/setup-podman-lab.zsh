@@ -1,7 +1,7 @@
 #compdef setup-podman-lab.sh
 
 local -a _profiles _commands _options
-_profiles=(all dev net sec monitor)
+_profiles=(all dev net sec monitor infra)
 _commands=(light teardown rebuild rerun)
 _options=(
   '--components'

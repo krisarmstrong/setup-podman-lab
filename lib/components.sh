@@ -5,8 +5,20 @@ LAB_OPTIONAL_COMPONENTS=(
   go-dev
   python-dev
   c-dev
+  cpp-dev
   node-dev
+  rust-dev
   alpine-tools
+  database-dev
+  web-server
+  ansible-control
+  pdf-builder
+  gvm-scanner
+  iperf-tools
+  http-server
+  librenms
+  librenms-db
+  snmp-demo
 )
 
 LAB_COMPONENT_FILTER_ACTIVE="false"
@@ -32,7 +44,7 @@ lab_component_known() {
 lab_profile_exists() {
   local name="$1"
   case "$name" in
-    ""|all|dev|net|sec|monitor) return 0 ;;
+    ""|all|dev|net|sec|monitor|infra) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -41,10 +53,11 @@ lab_profile_components() {
   local name="$1"
   case "$name" in
     all|"") printf '%s\n' "${LAB_PROJECT_DIRS[*]}" ;;
-    dev) printf 'ubuntu-dev fedora-dev go-dev python-dev c-dev node-dev alpine-tools pdf-builder' ;;
-    net) printf 'nmap-tools packet-analyzer iperf-tools http-test snmp-demo' ;;
-    sec) printf 'kali-vnc vulnerability-scanner nmap-tools' ;;
-    monitor) printf 'librenms librenms-db snmp-demo http-test' ;;
+    dev) printf 'ubuntu-dev fedora-dev go-dev python-dev c-dev cpp-dev node-dev rust-dev alpine-tools pdf-builder' ;;
+    net) printf 'nmap-tools network-capture iperf-tools http-server snmp-demo' ;;
+    sec) printf 'kali-vnc gvm-scanner nmap-tools network-capture' ;;
+    monitor) printf 'librenms librenms-db snmp-demo http-server' ;;
+    infra) printf 'database-dev web-server ansible-control' ;;
     *) printf '' ;;
   esac
 }
