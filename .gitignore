@@ -4,3 +4,7 @@ PodmanData/
 
 # OS noise
 .DS_Store
+
+# IDE and editor files
+.claude/
+AGENTS.md
