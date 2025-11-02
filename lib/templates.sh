@@ -9,13 +9,18 @@ LAB_PROJECT_DIRS=(
   go-dev
   python-dev
   c-dev
+  cpp-dev
   node-dev
+  rust-dev
   alpine-tools
   nmap-tools
-  packet-analyzer
-  vulnerability-scanner
+  network-capture
+  gvm-scanner
   iperf-tools
-  http-test
+  http-server
+  database-dev
+  web-server
+  ansible-control
   librenms
   librenms-db
   snmp-demo
@@ -30,11 +35,17 @@ LAB_DATA_DIRS=(
   go-home
   python-home
   c-home
+  cpp-home
   node-home
+  rust-home
   alpine-home
-  network-out
-  vulnerability-home
+  network-captures
+  gvm-data
   iperf-out
+  http-data
+  database-data
+  web-data
+  ansible-data
   librenms-data
   librenms-db
 )
@@ -203,6 +214,29 @@ WORKDIR /home/$dev_user
 CMD ["bash"]
 EOF
 
+  cat > "$projects_dir/cpp-dev/Containerfile" <<EOF
+FROM $(lab_resolve_base "$(lab_base_image_for "cpp-dev")")
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    build-essential g++ clang++ cmake ninja-build \
+    libboost-all-dev libeigen3-dev \
+    gdb lldb valgrind \
+    git curl sudo pkg-config ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+$(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
+USER $dev_user
+WORKDIR /home/$dev_user
+CMD ["bash"]
+EOF
+
+  cat > "$projects_dir/rust-dev/Containerfile" <<EOF
+FROM $(lab_resolve_base "$(lab_base_image_for "rust-dev")")
+$(lab_create_user_cmd "debian" "$dev_user" "$dev_pass")
+USER $dev_user
+WORKDIR /home/$dev_user/app
+CMD ["bash"]
+EOF
+
   # --- Networking / Security Containers ---
   {
     printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "nmap-tools")")"
@@ -218,22 +252,30 @@ CMD ["nmap"]
 EOF
   } > "$projects_dir/nmap-tools/Containerfile"
 
-  cat > "$projects_dir/packet-analyzer/Containerfile" <<EOF
-FROM $(lab_resolve_base "$(lab_base_image_for "packet-analyzer")")
+  cat > "$projects_dir/network-capture/Containerfile" <<EOF
+FROM $(lab_resolve_base "$(lab_base_image_for "network-capture")")
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y tshark sudo && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    tshark tcpdump wireshark-common \
+    net-tools iputils-ping iproute2 \
+    sudo ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 $(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
+RUN usermod -aG wireshark $dev_user
 USER $dev_user
 WORKDIR /home/$dev_user/captures
 CMD ["bash"]
 EOF
 
   {
-    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "vulnerability-scanner")")"
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "gvm-scanner")")"
     cat <<'EOF'
-EXPOSE 443
+ENV PASSWORD=admin
+EXPOSE 443 9390
+VOLUME ["/var/lib/openvas"]
+CMD ["/start"]
 EOF
-  } > "$projects_dir/vulnerability-scanner/Containerfile"
+  } > "$projects_dir/gvm-scanner/Containerfile"
 
   cat > "$projects_dir/iperf-tools/Containerfile" <<EOF
 FROM $(lab_resolve_base "$(lab_base_image_for "iperf-tools")")
@@ -246,14 +288,15 @@ CMD ["bash"]
 EOF
 
   {
-    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "http-test")")"
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "http-server")")"
     cat <<'EOF'
 WORKDIR /srv
 RUN mkdir -p /srv/www && echo 'OK' > /srv/www/index.html
 EXPOSE 8000
+VOLUME ["/srv/www"]
 CMD ["python", "-m", "http.server", "8000", "--directory", "/srv/www"]
 EOF
-  } > "$projects_dir/http-test/Containerfile"
+  } > "$projects_dir/http-server/Containerfile"
 
   {
     printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "snmp-demo")")"
@@ -265,6 +308,68 @@ EXPOSE 161/udp
 CMD ["snmpd", "-f", "-Lo"]
 EOF
   } > "$projects_dir/snmp-demo/Containerfile"
+
+  # --- Infrastructure Containers ---
+  cat > "$projects_dir/database-dev/Containerfile" <<EOF
+FROM $(lab_resolve_base "$(lab_base_image_for "database-dev")")
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    postgresql postgresql-contrib \
+    mysql-server \
+    redis-server \
+    sqlite3 \
+    sudo ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+$(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
+USER $dev_user
+WORKDIR /home/$dev_user
+EXPOSE 5432 3306 6379
+CMD ["bash"]
+EOF
+
+  {
+    printf 'FROM %s\n' "$(lab_resolve_base "$(lab_base_image_for "web-server")")"
+    cat <<'EOF'
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80 443
+VOLUME ["/usr/share/nginx/html"]
+CMD ["nginx", "-g", "daemon off;"]
+EOF
+  } > "$projects_dir/web-server/Containerfile"
+
+  cat > "$projects_dir/web-server/nginx.conf" <<'EOF'
+events {
+    worker_connections 1024;
+}
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    server {
+        listen 80;
+        server_name localhost;
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+        }
+    }
+}
+EOF
+
+  cat > "$projects_dir/ansible-control/Containerfile" <<EOF
+FROM $(lab_resolve_base "$(lab_base_image_for "ansible-control")")
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    python3 python3-pip \
+    sshpass openssh-client \
+    git sudo && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir ansible ansible-lint
+$(lab_create_user_cmd "ubuntu" "$dev_user" "$dev_pass")
+USER $dev_user
+WORKDIR /home/$dev_user/ansible
+CMD ["bash"]
+EOF
 
   # --- LibreNMS DB (MariaDB) ---
   {
@@ -297,24 +402,34 @@ EOF
   } > "$projects_dir/librenms/Containerfile"
 }
 lab_base_image_for() {
+  local python_version="${LAB_PYTHON_VERSION:-latest}"
   case "$1" in
     kali-vnc) printf 'kalilinux/kali-rolling' ;;
     pdf-builder) printf 'python:3.12-slim' ;;
     ubuntu-dev) printf 'ubuntu:latest' ;;
     fedora-dev) printf 'fedora:latest' ;;
     go-dev) printf 'golang:latest' ;;
-    python-dev) printf 'python:latest' ;;
+    python-dev) printf "python:${python_version}" ;;
     node-dev) printf 'node:latest' ;;
     c-dev) printf 'ubuntu:latest' ;;
+    cpp-dev) printf 'ubuntu:latest' ;;
+    rust-dev) printf 'rust:latest' ;;
     alpine-tools) printf 'alpine:latest' ;;
     nmap-tools) printf 'debian:bookworm-slim' ;;
-    packet-analyzer) printf 'ubuntu:latest' ;;
-    vulnerability-scanner) printf 'mikesplain/openvas:latest' ;;
+    network-capture) printf 'ubuntu:latest' ;;
+    gvm-scanner) printf 'greenbone/gvm:stable' ;;
     iperf-tools) printf 'ubuntu:latest' ;;
-    http-test) printf 'python:3.12-slim' ;;
+    http-server) printf 'python:3.12-slim' ;;
+    database-dev) printf 'ubuntu:latest' ;;
+    web-server) printf 'nginx:alpine' ;;
+    ansible-control) printf 'ubuntu:latest' ;;
     librenms) printf 'librenms/librenms:latest' ;;
     librenms-db) printf 'mariadb:11' ;;
     snmp-demo) printf 'debian:stable-slim' ;;
+    # Legacy names for backward compatibility
+    packet-analyzer) printf 'ubuntu:latest' ;;
+    vulnerability-scanner) printf 'greenbone/gvm:stable' ;;
+    http-test) printf 'python:3.12-slim' ;;
     *) printf '' ;;
   esac
 }

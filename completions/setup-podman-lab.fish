@@ -16,7 +16,7 @@ function __fish_setup_podman_lab_needs_command
     return 1
 end
 
-set -l profiles all dev net sec monitor
+set -l profiles all dev net sec monitor infra
 set -l options --components --build-only --run-only --profile --no-progress --progress --quiet --verbose --help
 
 complete -c setup-podman-lab.sh -n '__fish_setup_podman_lab_needs_command' -f -a 'light teardown rebuild rerun'

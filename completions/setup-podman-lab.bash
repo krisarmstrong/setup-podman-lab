@@ -5,7 +5,7 @@ _setup_podman_lab()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   commands="light teardown rebuild rerun"
-  profiles="all dev net sec monitor"
+  profiles="all dev net sec monitor infra"
   opts="--components --build-only --run-only --profile --no-progress --progress --quiet --verbose --help"
 
   case "$prev" in

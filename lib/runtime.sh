@@ -219,8 +219,14 @@ lab_start_containers() {
   lab_start_container_if_enabled "c-dev" "c-dev container" \
     -v "$data_dir/c-home:/home/$dev_user" "$(lab_image_name "c-dev")"
 
+  lab_start_container_if_enabled "cpp-dev" "cpp-dev container" \
+    -v "$data_dir/cpp-home:/home/$dev_user" "$(lab_image_name "cpp-dev")"
+
   lab_start_container_if_enabled "node-dev" "node-dev container" \
     -v "$data_dir/node-home:/home/$dev_user/app" "$(lab_image_name "node-dev")"
+
+  lab_start_container_if_enabled "rust-dev" "rust-dev container" \
+    -v "$data_dir/rust-home:/home/$dev_user" "$(lab_image_name "rust-dev")"
 
   lab_start_container_if_enabled "alpine-tools" "alpine-tools container" \
     -v "$data_dir/alpine-home:/home/$dev_user" "$(lab_image_name "alpine-tools")"
@@ -229,24 +235,24 @@ lab_start_containers() {
   lab_start_container_if_enabled "nmap-tools" "nmap-tools container" \
     "$(lab_image_name "nmap-tools")"
 
-  lab_start_container_if_enabled "packet-analyzer" "packet-analyzer container" \
+  lab_start_container_if_enabled "network-capture" "network-capture container" \
     --net=host \
     --cap-add=NET_ADMIN --cap-add=NET_RAW \
-    -v "$data_dir/network-out:/home/$dev_user/captures" \
-    "$(lab_image_name "packet-analyzer")"
+    -v "$data_dir/network-captures:/home/$dev_user/captures" \
+    "$(lab_image_name "network-capture")"
 
   lab_start_container_if_enabled "iperf-tools" "iperf-tools container" \
     -v "$data_dir/iperf-out:/home/$dev_user" \
     "$(lab_image_name "iperf-tools")"
 
-  lab_start_container_if_enabled "vulnerability-scanner" "vulnerability-scanner container" \
-    -p 4000:443 \
+  lab_start_container_if_enabled "gvm-scanner" "gvm-scanner container" \
+    -p 4000:443 -p 9390:9390 \
     -e PASSWORD="$gvm_password" \
-    -v "$data_dir/vulnerability-home:/var/lib/openvas" \
-    "$(lab_image_name "vulnerability-scanner")"
+    -v "$data_dir/gvm-data:/data" \
+    "$(lab_image_name "gvm-scanner")"
 
-  lab_start_container_if_enabled "http-test" "http-test container" \
-    -p 8000:8000 "$(lab_image_name "http-test")"
+  lab_start_container_if_enabled "http-server" "http-server container" \
+    -p 8000:8000 -v "$data_dir/http-data:/srv/www" "$(lab_image_name "http-server")"
 
   # LibreNMS stack
   lab_start_container_if_enabled "librenms-db" "librenms-db (MariaDB) container" \
@@ -264,6 +270,21 @@ lab_start_containers() {
   lab_start_container_if_enabled "snmp-demo" "snmp-demo container" \
     --network labnet \
     "$(lab_image_name "snmp-demo")"
+
+  # Infrastructure
+  lab_start_container_if_enabled "database-dev" "database-dev container" \
+    -p 5432:5432 -p 3306:3306 -p 6379:6379 \
+    -v "$data_dir/database-data:/var/lib/postgresql/data" \
+    "$(lab_image_name "database-dev")"
+
+  lab_start_container_if_enabled "web-server" "web-server container" \
+    -p 8080:80 \
+    -v "$data_dir/web-data:/usr/share/nginx/html" \
+    "$(lab_image_name "web-server")"
+
+  lab_start_container_if_enabled "ansible-control" "ansible-control container" \
+    -v "$data_dir/ansible-data:/home/$dev_user/ansible" \
+    "$(lab_image_name "ansible-control")"
 }
 
 lab_show_summary() {
@@ -302,7 +323,9 @@ lab_show_summary() {
   if lab_component_enabled_quiet "go-dev"; then dev_commands+=("podman exec -it go-dev bash"); fi
   if lab_component_enabled_quiet "python-dev"; then dev_commands+=("podman exec -it python-dev bash"); fi
   if lab_component_enabled_quiet "c-dev"; then dev_commands+=("podman exec -it c-dev bash"); fi
+  if lab_component_enabled_quiet "cpp-dev"; then dev_commands+=("podman exec -it cpp-dev bash"); fi
   if lab_component_enabled_quiet "node-dev"; then dev_commands+=("podman exec -it node-dev bash"); fi
+  if lab_component_enabled_quiet "rust-dev"; then dev_commands+=("podman exec -it rust-dev bash"); fi
   if lab_component_enabled_quiet "alpine-tools"; then dev_commands+=("podman exec -it alpine-tools bash"); fi
   if [ "${#dev_commands[@]}" -gt 0 ]; then
     lab_log_info ""
@@ -315,9 +338,9 @@ lab_show_summary() {
 
   local net_lines=()
   if lab_component_enabled_quiet "nmap-tools"; then net_lines+=("podman exec -it nmap-tools nmap -v <target>"); fi
-  if lab_component_enabled_quiet "packet-analyzer"; then net_lines+=("podman exec -it packet-analyzer bash   # sudo tshark -i eth0"); fi
+  if lab_component_enabled_quiet "network-capture"; then net_lines+=("podman exec -it network-capture bash   # sudo tshark -i eth0 / sudo tcpdump"); fi
   if lab_component_enabled_quiet "iperf-tools"; then net_lines+=("podman exec -it iperf-tools bash       # iperf3 -s / -c"); fi
-  if lab_component_enabled_quiet "vulnerability-scanner"; then net_lines+=("GVM: https://localhost:4000  (maps to container port 443; default login admin / $gvm_password)"); fi
+  if lab_component_enabled_quiet "gvm-scanner"; then net_lines+=("GVM: https://localhost:4000  (maps to container port 443; default login admin / $gvm_password)"); fi
   if [ "${#net_lines[@]}" -gt 0 ]; then
     lab_log_info ""
     lab_log_info "🌐 Net/Sec:"
@@ -327,10 +350,11 @@ lab_show_summary() {
     done
   fi
 
-  if lab_component_enabled_quiet "http-test"; then
+  if lab_component_enabled_quiet "http-server"; then
     lab_log_info ""
-    lab_log_info "🧪 HTTP Test:"
-    lab_log_info "  http://localhost:8000  -> 'OK'"
+    lab_log_info "🌐 HTTP Server:"
+    lab_log_info "  http://localhost:8000"
+    lab_log_info "  Serving: $data_dir/http-data"
   fi
 
   if lab_component_enabled_quiet "librenms" || lab_component_enabled_quiet "librenms-db"; then
@@ -345,9 +369,22 @@ lab_show_summary() {
     lab_log_info "  Note: first run may take 1–2 minutes to finish migrations."
   fi
 
-  if lab_component_enabled_quiet "packet-analyzer"; then
+  if lab_component_enabled_quiet "network-capture"; then
     lab_log_info ""
     lab_log_info "  NOTE: on macOS/Podman this captures from the VM, not your Mac's Wi-Fi."
+  fi
+
+  local infra_lines=()
+  if lab_component_enabled_quiet "database-dev"; then infra_lines+=("Database Dev: PostgreSQL(5432), MySQL(3306), Redis(6379)"); fi
+  if lab_component_enabled_quiet "web-server"; then infra_lines+=("Web Server: http://localhost:8080"); fi
+  if lab_component_enabled_quiet "ansible-control"; then infra_lines+=("Ansible: podman exec -it ansible-control bash"); fi
+  if [ "${#infra_lines[@]}" -gt 0 ]; then
+    lab_log_info ""
+    lab_log_info "🏗️  Infrastructure:"
+    local line
+    for line in "${infra_lines[@]}"; do
+      lab_log_info "  $line"
+    done
   fi
 
   if [ "$is_mac" = "true" ]; then
