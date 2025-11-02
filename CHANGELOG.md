@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1](https://github.com/krisarmstrong/setup-podman-lab/compare/v1.0.0...v1.0.1) (2025-11-02)
+
+
+### Bug Fixes
+
+* disable problematic pre-commit hooks ([979fa1d](https://github.com/krisarmstrong/setup-podman-lab/commit/979fa1dc8509713a6687c61a692cc40586bd248b))
+
 ## 1.0.0 (2025-11-02)
 
 
