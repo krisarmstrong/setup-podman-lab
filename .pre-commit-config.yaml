@@ -30,7 +30,6 @@ repos:
 
       # Check YAML syntax
       - id: check-yaml
-        args: ['--safe']
 
       # Check JSON syntax
       - id: check-json

@@ -10,6 +10,7 @@ _setup_podman_lab()
 
   case "$prev" in
     --profile)
+      # shellcheck disable=SC2207
       COMPREPLY=( $(compgen -W "$profiles" -- "$cur") )
       return 0
       ;;
@@ -17,14 +18,17 @@ _setup_podman_lab()
       return 0
       ;;
     rebuild|rerun)
+      # shellcheck disable=SC2207
       COMPREPLY=( $(compgen -W "$profiles" -- "$cur") )
       return 0
       ;;
   esac
 
   if [[ "$cur" == -* ]]; then
+    # shellcheck disable=SC2207
     COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
   else
+    # shellcheck disable=SC2207
     COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
   fi
   return 0
