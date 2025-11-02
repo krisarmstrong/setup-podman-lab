@@ -1,9 +1,7 @@
 # 🧰 Podman Lab Bootstrap
 
-**A full-featured local lab environment for developers, hackers, and network engineers — in one command.**  
-Automatically installs Podman (if missing), builds a clean container suite (dev, network, and security tools), and spins up everything from a **Kali VNC desktop** to **LibreNMS with MariaDB**.  
-
-See the [Repository Guidelines](AGENTS.md) before contributing changes.
+**A full-featured local lab environment for developers, hackers, and network engineers — in one command.**
+Automatically installs Podman (if missing), builds a clean container suite (dev, network, and security tools), and spins up everything from a **Kali VNC desktop** to **LibreNMS with MariaDB**.
 
 No Docker Desktop tax. No manual setup. No excuses.
 

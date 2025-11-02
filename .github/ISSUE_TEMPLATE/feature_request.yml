@@ -1,0 +1,88 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please describe your idea in detail.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: Which area does this feature relate to?
+      options:
+        - New Container/Tool
+        - Existing Container Enhancement
+        - Build/Deployment Automation
+        - Platform Support
+        - Documentation
+        - Testing
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? Is your feature request related to a problem?
+      placeholder: I'm frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see
+      placeholder: I would like to add...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: I've tried...
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Ideas
+      description: |
+        (Optional) Do you have ideas on how this could be implemented?
+        - Which containers would be affected?
+        - What dependencies would be needed?
+        - Any configuration changes required?
+      placeholder: This could be implemented by...
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to help implement this feature?
+      options:
+        - label: I am willing to submit a pull request for this feature
+          required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or examples about the feature request
+      placeholder: Here's an example...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: This feature aligns with the project's goals (dev/network/security lab tooling)
+          required: true

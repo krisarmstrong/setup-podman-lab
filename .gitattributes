@@ -1,0 +1,77 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Explicitly declare text files
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+*.fish text eol=lf
+*.md text
+*.txt text
+*.json text
+*.yml text
+*.yaml text
+
+# Containerfiles
+Containerfile text eol=lf
+Dockerfile text eol=lf
+*.containerfile text eol=lf
+*.dockerfile text eol=lf
+
+# Scripts should always use LF for cross-platform compatibility
+scripts/* text eol=lf
+completions/* text eol=lf
+
+# Git configuration files
+.gitignore text
+.gitattributes text
+.editorconfig text
+
+# Documentation
+README* text
+LICENSE text
+CHANGELOG* text
+CONTRIBUTING* text
+CODE_OF_CONDUCT* text
+SECURITY* text
+AGENTS* text
+
+# Denote binary files (if any in the future)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+
+# Diff settings for specific file types
+*.sh diff=bash
+*.md diff=markdown
+*.json diff=json
+
+# Archive files
+*.tar.gz -diff -merge
+*.zip -diff -merge
+
+# Git merge strategies
+CHANGELOG.md merge=union
+
+# Linguist overrides for GitHub language statistics
+*.sh linguist-language=Shell
+completions/* linguist-language=Shell
+scripts/* linguist-language=Shell
+.github/workflows/*.yml linguist-language=YAML
+
+# Mark generated files (if any)
+# PodmanProjects/** -diff linguist-generated=true
+# PodmanData/** -diff linguist-generated=true
+
+# Export-ignore (files not included in git archive)
+.github/ export-ignore
+.editorconfig export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
+lab-tmp/ export-ignore

@@ -1,0 +1,88 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevent committing to main directly (optional - comment out if not desired)
+      # - id: no-commit-to-branch
+      #   args: ['--branch', 'main']
+
+      # Check for files that would conflict in case-insensitive filesystems
+      - id: check-case-conflict
+
+      # Ensure files end with a newline
+      - id: end-of-file-fixer
+        exclude: '^(VERSION|\.gitignore)$'
+
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']
+
+      # Check for merge conflicts
+      - id: check-merge-conflict
+
+      # Prevent committing large files
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+
+      # Check YAML syntax
+      - id: check-yaml
+        args: ['--safe']
+
+      # Check JSON syntax
+      - id: check-json
+
+      # Check for files that shouldn't be committed
+      - id: check-symlinks
+      - id: destroyed-symlinks
+
+      # Detect private keys
+      - id: detect-private-key
+
+      # Check shell script syntax
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+  # ShellCheck for shell scripts
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['-e', 'SC2312', '--severity=warning']
+        files: \.(sh|bash)$
+
+  # EditorConfig validation
+  - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
+    rev: 2.7.3
+    hooks:
+      - id: editorconfig-checker
+        alias: ec
+
+  # Markdown linting
+  - repo: https://github.com/markdownlint/markdownlint
+    rev: v0.12.0
+    hooks:
+      - id: markdownlint
+        args: ['--style', '.markdownlint.json', '--warnings']
+        exclude: '^CHANGELOG\.md$'
+
+  # Commit message validation (conventional commits)
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: []
+
+# Configuration for specific file types
+files: ''
+exclude: |
+  (?x)^(
+      lab-tmp/.*|
+      PodmanProjects/.*|
+      PodmanData/.*|
+      \.git/.*
+  )$

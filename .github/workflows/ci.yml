@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck on main script
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+          format: gcc
+        env:
+          SHELLCHECK_OPTS: -e SC2312
+
+      - name: Run ShellCheck on helper scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
+          severity: warning
+          format: gcc
+
+  syntax-check:
+    name: Bash Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: |
+          bash -n setup-podman-lab.sh
+          for script in scripts/*.sh; do
+            if [ -f "$script" ]; then
+              echo "Checking $script..."
+              bash -n "$script"
+            fi
+          done
+
+  test-light-build:
+    name: Test Light Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Check Podman version
+        run: podman --version
+
+      - name: Run light build (build-only)
+        run: |
+          export PODMAN_LAB_ROOT="${PWD}/lab-tmp"
+          export LAB_SKIP_REGISTRY_CHECK=1
+          export LAB_OFFLINE_MODE=0
+          ./setup-podman-lab.sh light --build-only --quiet
+        timeout-minutes: 25
+
+      - name: Verify generated structure
+        run: |
+          export PODMAN_LAB_ROOT="${PWD}/lab-tmp"
+          test -d "${PODMAN_LAB_ROOT}/PodmanProjects"
+          test -d "${PODMAN_LAB_ROOT}/PodmanData"
+          ls -la "${PODMAN_LAB_ROOT}/PodmanProjects"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          export PODMAN_LAB_ROOT="${PWD}/lab-tmp"
+          ./setup-podman-lab.sh teardown || true
+          rm -rf "${PWD}/lab-tmp"
+
+  test-profiles:
+    name: Test Profile Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test profile help output
+        run: |
+          ./setup-podman-lab.sh --help | grep -q "profile"
+          ./setup-podman-lab.sh --help | grep -q "dev"
+          ./setup-podman-lab.sh --help | grep -q "net"
+          ./setup-podman-lab.sh --help | grep -q "sec"
+
+  completions-check:
+    name: Verify Completions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check bash completion
+        run: |
+          test -f completions/setup-podman-lab.bash
+          bash -n completions/setup-podman-lab.bash
+
+      - name: Check zsh completion
+        run: test -f completions/setup-podman-lab.zsh
+
+      - name: Check fish completion
+        run: test -f completions/setup-podman-lab.fish
+
+  version-check:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check VERSION file exists
+        run: test -f VERSION
+
+      - name: Verify VERSION format
+        run: |
+          VERSION=$(cat VERSION)
+          echo "Version: $VERSION"
+          if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: VERSION file does not match semver format (x.y.z)"
+            exit 1
+          fi
+
+      - name: Check for version in script
+        run: |
+          if grep -q "VERSION=" setup-podman-lab.sh; then
+            echo "Found VERSION variable in script"
+          fi

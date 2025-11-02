@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install semantic-release and plugins
+        run: |
+          npm install -g \
+            semantic-release@^22 \
+            @semantic-release/changelog@^6 \
+            @semantic-release/git@^10 \
+            @semantic-release/github@^9 \
+            @semantic-release/exec@^6 \
+            conventional-changelog-conventionalcommits@^7
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
+
+      - name: Print release info
+        if: success()
+        run: |
+          if [ -f VERSION ]; then
+            echo "New version: $(cat VERSION)"
+          fi
+          echo "Check CHANGELOG.md for updates"
