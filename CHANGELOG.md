@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4](https://github.com/krisarmstrong/setup-podman-lab/compare/v1.0.3...v1.0.4) (2025-11-02)
+
+
+### Bug Fixes
+
+* use verbose output in CI for debugging ([faedcb3](https://github.com/krisarmstrong/setup-podman-lab/commit/faedcb33ce900752200f4180e09e56596f59cec1))
+
 ## [1.0.3](https://github.com/krisarmstrong/setup-podman-lab/compare/v1.0.2...v1.0.3) (2025-11-02)
 
 
