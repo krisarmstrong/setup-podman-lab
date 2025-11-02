@@ -4,9 +4,9 @@ _setup_podman_lab()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="light teardown rebuild rerun"
+  commands="light teardown rebuild rerun lan-enable lan-disable lan-status"
   profiles="all dev net sec monitor infra"
-  opts="--components --build-only --run-only --profile --no-progress --progress --quiet --verbose --help"
+  opts="--components --build-only --run-only --profile --lan-mode --lan-interface --no-progress --progress --quiet --verbose --help"
 
   case "$prev" in
     --profile)
@@ -14,12 +14,17 @@ _setup_podman_lab()
       COMPREPLY=( $(compgen -W "$profiles" -- "$cur") )
       return 0
       ;;
-    --components)
+    --components|--lan-interface)
       return 0
       ;;
     rebuild|rerun)
       # shellcheck disable=SC2207
       COMPREPLY=( $(compgen -W "$profiles" -- "$cur") )
+      return 0
+      ;;
+    lan-enable|lan-disable)
+      # shellcheck disable=SC2207
+      COMPREPLY=( $(compgen -W "all $(podman ps --format '{{.Names}}' 2>/dev/null)" -- "$cur") )
       return 0
       ;;
   esac

@@ -2,12 +2,14 @@
 
 local -a _profiles _commands _options
 _profiles=(all dev net sec monitor infra)
-_commands=(light teardown rebuild rerun)
+_commands=(light teardown rebuild rerun lan-enable lan-disable lan-status)
 _options=(
   '--components'
   '--build-only'
   '--run-only'
   '--profile'
+  '--lan-mode'
+  '--lan-interface'
   '--no-progress'
   '--progress'
   '--quiet'
@@ -25,11 +27,15 @@ _setup_podman_lab() {
       _describe 'profiles' _profiles
       return
       ;;
-    --components)
+    --components|--lan-interface)
       return
       ;;
     rebuild|rerun)
       _describe 'targets' _profiles
+      return
+      ;;
+    lan-enable|lan-disable)
+      _values 'container' all $(podman ps --format '{{.Names}}' 2>/dev/null)
       return
       ;;
   esac
