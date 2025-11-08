@@ -1,5 +1,8 @@
 # 🧰 Podman Lab Bootstrap
 
+![Shell](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnubash&logoColor=white) ![License](https://img.shields.io/badge/License-MIT-green) ![Podman](https://img.shields.io/badge/Container-Podman-892CA0?logo=podman) ![Status](https://img.shields.io/badge/Status-Active-success)
+
+
 **A full-featured local lab environment for developers, hackers, and network engineers — in one command.**
 Automatically installs Podman (if missing), builds a clean container suite (dev, network, and security tools), and spins up everything from a **Kali VNC desktop** to **LibreNMS with MariaDB**.
 
@@ -46,17 +49,17 @@ No Docker Desktop tax. No manual setup. No excuses.
    ```bash
    git clone https://github.com/krisarmstrong/setup-podman-lab.git
    cd setup-podman-lab
-   chmod +x setup-podman-lab.sh
+   chmod +x src/setup-podman-lab.sh
    ```
 
 2. Run the bootstrap:
    ```bash
-   ./setup-podman-lab.sh
+   ./src/setup-podman-lab.sh
    ```
 
-   Or, if you’re on a Mac that’s *barely breathing*:
+   Or, if you're on a Mac that's *barely breathing*:
    ```bash
-   ./setup-podman-lab.sh light
+   ./src/setup-podman-lab.sh light
    ```
 
 3. Grab coffee ☕ — it builds ~15 containers.
@@ -104,23 +107,23 @@ No Docker Desktop tax. No manual setup. No excuses.
 | Command | Purpose |
 |----------|----------|
 | `podman ps` | List running containers |
-| `./setup-podman-lab.sh --profile dev --build-only` | Rebuild just the dev stack |
-| `./setup-podman-lab.sh --profile dev --run-only` | Restart previously built dev containers |
-| `./setup-podman-lab.sh --components kali-vnc,http-test` | Target specific components |
+| `./src/setup-podman-lab.sh --profile dev --build-only` | Rebuild just the dev stack |
+| `./src/setup-podman-lab.sh --profile dev --run-only` | Restart previously built dev containers |
+| `./src/setup-podman-lab.sh --components kali-vnc,http-test` | Target specific components |
 | `podman exec -it ubuntu-dev bash` | Open a shell in the Ubuntu dev container |
 | `podman exec -it packet-analyzer bash` | Run Wireshark CLI (tshark) |
 | `podman logs librenms` | Check LibreNMS startup logs |
 | `podman machine inspect` | Show machine config (Mac) |
-| `scripts/verify-lab.sh` | Smoke-test key services (kali-vnc, http-test, librenms, GVM) |
+| `./src/scripts/verify-lab.sh` | Smoke-test key services (kali-vnc, http-test, librenms, GVM) |
 
 ---
 
 ## 🔄 Cleanup
 
-When you’re done wrecking your lab:
+When you're done wrecking your lab:
 
 ```bash
-./setup-podman-lab.sh teardown
+./src/setup-podman-lab.sh teardown
 ```
 
 That stops everything, deletes images, nukes volumes, and removes:
@@ -235,11 +238,11 @@ Detailed logs for every run live in `$(PODMAN_LAB_ROOT:-$HOME)/logs/setup-podman
 
 | File | Purpose |
 |------|---------|
-| `completions/setup-podman-lab.bash` | Bash completion for commands, profiles, and flags. Source it in your shell (`source completions/setup-podman-lab.bash`) for tab completion. |
-| `completions/setup-podman-lab.zsh` | zsh completion. Add `fpath+=(path/to/completions)` and `autoload -Uz compinit; compinit`. |
-| `completions/setup-podman-lab.fish` | fish completion. Copy into `~/.config/fish/completions/`. |
-| `scripts/verify-lab.sh` | Basic smoke test. Runs `podman ps`, checks the VNC/http/LibreNMS/GVM containers, and exits non-zero on failure. |
-| `scripts/verify-openvas.sh` | Targeted GVM health check (`podman exec vulnerability-scanner gvm-cli ...`). |
+| `src/completions/setup-podman-lab.bash` | Bash completion for commands, profiles, and flags. Source it in your shell (`source src/completions/setup-podman-lab.bash`) for tab completion. |
+| `src/completions/setup-podman-lab.zsh` | zsh completion. Add `fpath+=(path/to/src/completions)` and `autoload -Uz compinit; compinit`. |
+| `src/completions/setup-podman-lab.fish` | fish completion. Copy into `~/.config/fish/completions/`. |
+| `src/scripts/verify-lab.sh` | Basic smoke test. Runs `podman ps`, checks the VNC/http/LibreNMS/GVM containers, and exits non-zero on failure. |
+| `src/scripts/verify-openvas.sh` | Targeted GVM health check (`podman exec vulnerability-scanner gvm-cli ...`). |
 
 ---
 
