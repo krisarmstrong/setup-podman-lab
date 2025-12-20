@@ -8,3 +8,21 @@ PodmanData/
 # IDE and editor files
 .claude/
 AGENTS.md
+
+# Tooling defaults
+*.log
+.env
+.env.*
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+dist/
+build/
+*.egg-info/
+.eggs/
+.tox/
+.nox/

@@ -16,7 +16,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/networking.sh
 . "$SCRIPT_DIR/lib/networking.sh"
 
+PYPROJECT_PATH="$SCRIPT_DIR/../pyproject.toml"
 LAB_VERSION_FALLBACK="1.1.1"
+if command -v python3 >/dev/null 2>&1 && [ -f "$PYPROJECT_PATH" ]; then
+  LAB_VERSION_FALLBACK="$(
+    python3 - "$PYPROJECT_PATH" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = tomllib.loads(path.read_text())
+print(data.get("project", {}).get("version", "0.0.0"))
+PY
+  )"
+fi
 LAB_VERSION="$(lab_detect_version "$SCRIPT_DIR" "$LAB_VERSION_FALLBACK")"
 
 DEV_USER="dev"
