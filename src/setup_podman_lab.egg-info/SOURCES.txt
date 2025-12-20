@@ -1,0 +1,9 @@
+LICENSE
+README.md
+pyproject.toml
+src/setup_podman_lab.egg-info/PKG-INFO
+src/setup_podman_lab.egg-info/SOURCES.txt
+src/setup_podman_lab.egg-info/dependency_links.txt
+src/setup_podman_lab.egg-info/requires.txt
+src/setup_podman_lab.egg-info/top_level.txt
+tests/test_cli.py

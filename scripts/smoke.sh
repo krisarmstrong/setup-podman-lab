@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+CACHE_DIR="${PYTHONPYCACHEPREFIX:-$(pwd)/.pyc-cache}"
+export PYTHONPYCACHEPREFIX="$CACHE_DIR"
+mkdir -p "$PYTHONPYCACHEPREFIX"
+
 set -Eeuo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -12,7 +16,7 @@ fi
 ran_any=false
 
 if find . -maxdepth 2 -type f -name '*.py' 2>/dev/null | grep -q .; then
-  python3 -m compileall .
+  python3 -m compileall -q -x '(^|/)(\.git|\.pyc-cache|\.venv|venv|env|archive)(/|$)' .
   ran_any=true
 fi
 
