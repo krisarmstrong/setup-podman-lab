@@ -2,7 +2,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_ROOT / "src" / "setup-podman-lab.sh"
 
@@ -41,7 +40,7 @@ def test_lan_status_handles_missing_network(tmp_path):
     podman_stub = bin_dir / "podman"
     podman_stub.write_text(
         "#!/usr/bin/env bash\n"
-        "if [ \"$1\" = \"network\" ] && [ \"$2\" = \"exists\" ]; then\n"
+        'if [ "$1" = "network" ] && [ "$2" = "exists" ]; then\n'
         "  exit 1\n"
         "fi\n"
         "exit 0\n"
