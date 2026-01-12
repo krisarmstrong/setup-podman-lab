@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/krisarmstrong/setup-podman-lab/compare/v1.1.0...v1.2.0) (2026-01-12)
+
+
+### Features
+
+* add dual-network LAN mode with macvlan support ([6334e11](https://github.com/krisarmstrong/setup-podman-lab/commit/6334e112472a584e73555e6aaa5680d71e0c9a59))
+* reorganize scripts and bump to 1.1.1 ([b2404af](https://github.com/krisarmstrong/setup-podman-lab/commit/b2404af97b863cc6eaf66e5e86ad87da25fee965))
+
+
+### Documentation
+
+* add release process documentation ([393d19f](https://github.com/krisarmstrong/setup-podman-lab/commit/393d19fbef52c8e07010d2dd7cdebd30cd7e2b52))
+
 ## [1.1.1](https://github.com/krisarmstrong/setup-podman-lab/compare/v1.1.0...v1.1.1) (2025-12-20)
 
 ### Patch
