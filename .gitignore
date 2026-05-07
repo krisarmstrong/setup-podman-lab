@@ -1,28 +1,85 @@
-# Generated lab artifacts (created under repo if bootstrap paths are customized)
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║ Podman Lab Bootstrap - .gitignore                                         ║
+# ╠═══════════════════════════════════════════════════════════════════════════╣
+# ║ Automation tooling for building Podman-based network labs                 ║
+# ║ Stack: Python 3.x, Podman/containers, shell automation                    ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+# ─── Python Core ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# ─── Virtual Environments ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.Python
+
+# ─── Distribution & Packaging ────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+MANIFEST
+
+# ─── Testing & Coverage ──────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# ─── Type Checking & Linting ─────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# ─── Environment & Secrets ───────────────────────────────────────────────────
+.env
+.env.*
+.env.local
+
+# ─── Lab-Specific Artifacts ──────────────────────────────────────────────────
+# Generated lab projects (if created under repo with custom paths)
 PodmanProjects/
 PodmanData/
 
-# OS noise
-.DS_Store
+# Lab environment data
+lab-tmp/
+*.lab/
 
-# IDE and editor files
+# Container build context
+build_context/
+dockerfile_cache/
+
+# Lab configuration overrides
+config.local.yaml
+lab-config.local.json
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+setup_*.log
+container_*.log
+
+# ─── AI/Agent Artifacts ──────────────────────────────────────────────────────
 .claude/
 AGENTS.md
 
-# Tooling defaults
-*.log
-.env
-.env.*
-.venv/
-venv/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-.coverage
-coverage.xml
-dist/
-build/
-*.egg-info/
-.eggs/
-.tox/
-.nox/
+# ─── Temporary Files ─────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*~
+.tmp_*
