@@ -12,28 +12,28 @@ No Docker Desktop tax. No manual setup. No excuses.
 
 ## 🚀 Features
 
-- **Automatic setup**  
+- **Automatic setup**
   - Installs Podman (macOS/Linux)
   - Creates clean folder structure
   - Builds and runs all containers from scratch
   - Supports `light` mode for smaller environments
 
-- **Teardown mode**  
+- **Teardown mode**
   ```bash
   ./setup-podman-lab.sh teardown
   ```
   Wipes all containers, images, and folders. Back to factory clean.
 
-- **Rootful Podman machine (Mac/Linux)**  
+- **Rootful Podman machine (Mac/Linux)**
   - Allocates 4 CPUs, 4GB RAM, 40GB disk (macOS)
   - Automatically installs `podman-mac-helper` for native networking
 
 - **Self-contained Containers**
-  - 🖥️ **Kali XFCE Desktop (VNC)** – for GUI hacking & testing  
-  - 🧑‍💻 **Dev Containers** – Ubuntu, Fedora, Go, Python, Node, C, Alpine  
-  - 📡 **Networking / Security Tools** – Nmap, Wireshark/Tshark, iPerf3, GVM/OpenVAS  
-  - 🌐 **HTTP Test Server** – Python HTTP server for quick endpoint checks  
-  - 🧾 **PDF Builder** – Generates floorplan PDFs via ReportLab  
+  - 🖥️ **Kali XFCE Desktop (VNC)** – for GUI hacking & testing
+  - 🧑‍💻 **Dev Containers** – Ubuntu, Fedora, Go, Python, Node, C, Alpine
+  - 📡 **Networking / Security Tools** – Nmap, Wireshark/Tshark, iPerf3, GVM/OpenVAS
+  - 🌐 **HTTP Test Server** – Python HTTP server for quick endpoint checks
+  - 🧾 **PDF Builder** – Generates floorplan PDFs via ReportLab
   - 📈 **LibreNMS Stack** – LibreNMS + MariaDB + SNMP Demo node
 - **Flexible automation**
   - Profiles for dev / net / security / monitoring stacks
@@ -64,12 +64,12 @@ No Docker Desktop tax. No manual setup. No excuses.
 
 3. Grab coffee ☕ — it builds ~15 containers.
 
-> Running in a sandbox or on a shared machine? Set `PODMAN_LAB_ROOT` to redirect the generated `PodmanProjects/` and `PodmanData/` folders, for example:  
+> Running in a sandbox or on a shared machine? Set `PODMAN_LAB_ROOT` to redirect the generated `PodmanProjects/` and `PodmanData/` folders, for example:
 > `PODMAN_LAB_ROOT="$PWD/lab-tmp" ./setup-podman-lab.sh light`
 >
 > On macOS, adjust the Podman VM disk size with `PODMAN_MACHINE_DISK_SIZE=120` if you need more space.
 >
-> First-time pull? Avoid Docker Hub throttling by authenticating once:  
+> First-time pull? Avoid Docker Hub throttling by authenticating once:
 > `podman login docker.io`
 >
 > Have a registry mirror? Set `LAB_REGISTRY_MIRROR="mirror.example.com/docker"` and the lab will rewrite hostless base images automatically (official library images gain the `/library` prefix for you).
@@ -85,7 +85,7 @@ No Docker Desktop tax. No manual setup. No excuses.
 | LibreNMS DB | `librenms` | `librenmspass` |
 | LibreNMS Root | `librenmsroot` | *(internal only)* |
 
-> Change these before using in anything production-like.  
+> Change these before using in anything production-like.
 > Or don’t — just don’t email me from your breach report.
 
 ---
@@ -147,11 +147,11 @@ Each container gets its own subfolder, so nothing collides.
 
 ## ⚙️ macOS Notes
 
-- Uses **Podman Machine** (VM-based)  
-- `podman-mac-helper` installed automatically for native networking  
+- Uses **Podman Machine** (VM-based)
+- `podman-mac-helper` installed automatically for native networking
 - Capture containers (like packet-analyzer) see VM interfaces, not Wi-Fi directly
 
-**Avoid Docker Hub rate limiting:**  
+**Avoid Docker Hub rate limiting:**
 Authenticate once before running the full lab so base images pull without throttling:
 ```bash
 podman login docker.io
@@ -188,10 +188,10 @@ podman machine set --cpus 8 --memory 8192
 podman machine restart
 ```
 
-**Hit Docker Hub “too many requests”:**  
+**Hit Docker Hub “too many requests”:**
 Unauthenticated pulls are rate limited. Run `podman login docker.io`, or retry later once the limit resets.
 
-**Working fully offline:**  
+**Working fully offline:**
 Pre-pull the base images you need (e.g. `podman pull ubuntu:latest`), then run with `LAB_OFFLINE_MODE=1` to disable remote pulls.
 
 ---
@@ -248,8 +248,8 @@ Detailed logs for every run live in `$(PODMAN_LAB_ROOT:-$HOME)/logs/setup-podman
 
 ## 👤 Author
 
-**Kris Armstrong**  
-Sales / Systems Engineer • Network & Cybersecurity Specialist  
+**Kris Armstrong**
+Sales / Systems Engineer • Network & Cybersecurity Specialist
 **“The Man. The Myth. The Legend.”**
 
 [LinkedIn](https://www.linkedin.com/in/kris-armstrong) | [GitHub](https://github.com/krisarmstrong)
@@ -258,7 +258,7 @@ Sales / Systems Engineer • Network & Cybersecurity Specialist
 
 ## ⚠️ Disclaimer
 
-This lab is **not hardened**. It’s intentionally permissive to make development and testing easy.  
+This lab is **not hardened**. It’s intentionally permissive to make development and testing easy.
 Don’t expose any of these containers directly to the internet unless you’re doing a pen test and you *really* know what you’re doing.
 
 ---
