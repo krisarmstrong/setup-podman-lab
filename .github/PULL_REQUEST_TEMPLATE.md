@@ -1,115 +1,39 @@
-## Description
+## Summary
 
-<!-- Provide a brief description of what this PR does -->
+<!-- What changed and why? Keep this short and concrete. -->
+
+## Linked Issue
+
+<!-- Use Fixes #123, Closes #123, or Related to #123. Every PR should point at tracked work unless it is emergency maintenance. -->
+
+Fixes #
 
 ## Type of Change
 
-<!-- Check all that apply -->
-
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-- [ ] Code refactoring
-- [ ] Performance improvement
-- [ ] CI/CD improvement
-
-## Motivation and Context
-
-<!-- Why is this change required? What problem does it solve? -->
-<!-- Link to related issue(s): Fixes #(issue) -->
-
-## Changes Made
-
-<!-- List the specific changes in this PR -->
-
--
--
--
-
-## Affected Components
-
-<!-- Check all components affected by this PR -->
-
-- [ ] Main bootstrap script (`setup-podman-lab.sh`)
-- [ ] Dev containers (ubuntu-dev, fedora-dev, etc.)
-- [ ] Network tools (nmap, packet-analyzer, iperf, http-test)
-- [ ] Security tools (kali-vnc, vulnerability-scanner)
-- [ ] Monitoring stack (LibreNMS, MariaDB, SNMP)
-- [ ] Build system / profiles
+- [ ] Defect fix
+- [ ] Feature
+- [ ] Chore / refactor / dependency update
 - [ ] Documentation
-- [ ] CI/CD workflows
-- [ ] Helper scripts
+- [ ] CI / release / packaging
+- [ ] Security hardening
 
-## Testing Performed
+## Risk
 
-<!-- Describe the testing you've done -->
+- [ ] Low
+- [ ] Medium
+- [ ] High
 
-- [ ] Full build: `./setup-podman-lab.sh`
-- [ ] Light build: `./setup-podman-lab.sh light`
-- [ ] Profile-specific build: `./setup-podman-lab.sh --profile <name>`
-- [ ] Component-specific build: `./setup-podman-lab.sh --components <list>`
-- [ ] Teardown: `./setup-podman-lab.sh teardown`
-- [ ] Smoke tests: `scripts/verify-lab.sh`
-- [ ] ShellCheck: `shellcheck setup-podman-lab.sh`
-- [ ] Manual verification of affected containers
+## Testing Evidence
 
-## Test Environment
+<!-- Paste the exact commands you ran and the meaningful result. "Not run" requires a reason. -->
 
-<!-- Provide details about your test environment -->
-
-- **OS**: <!-- e.g., macOS 14.2, Ubuntu 22.04 -->
-- **Podman Version**: <!-- output of `podman --version` -->
-- **Platform**: <!-- macOS, Linux -->
-
-## Console Output / Logs
-
-<!-- If relevant, include console output or log snippets -->
-<!-- Redact any sensitive credentials -->
+```text
 
 ```
-# Paste relevant output here
-```
 
-## Documentation Updates
+## Security and Release Checklist
 
-- [ ] README.md updated (if applicable)
-- [ ] CONTRIBUTING.md updated (if guidelines changed)
-- [ ] New access points documented (if services added)
-- [ ] Default credentials documented (if changed/added)
-
-## Security Considerations
-
-<!-- Does this PR introduce any security implications? -->
-<!-- Have you updated default credentials or network bindings? -->
-
-- [ ] No security implications
-- [ ] Security implications addressed (explain below)
-
-<!-- If applicable, describe security changes -->
-
-## Breaking Changes
-
-<!-- Does this PR introduce any breaking changes? -->
-
-- [ ] No breaking changes
-- [ ] Breaking changes (describe migration path below)
-
-<!-- If applicable, describe what users need to do to migrate -->
-
-## Checklist
-
-- [ ] My code follows the project's coding style (see CONTRIBUTING.md)
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have tested this on my local environment
-- [ ] ShellCheck passes without warnings (or suppressions are justified)
-- [ ] Generated Containerfiles are valid and build successfully
-- [ ] Affected containers start and run as expected
-- [ ] I have updated documentation as needed
-- [ ] My changes generate no new warnings
-- [ ] New and existing tests pass locally
-
-## Additional Notes
-
-<!-- Any additional information reviewers should know -->
+- [ ] No secrets, tokens, credentials, or customer data are included.
+- [ ] Mutating routes, auth surfaces, permission checks, and output encoding were reviewed if touched.
+- [ ] Dependencies are pinned and justified if changed.
+- [ ] Documentation, screenshots, or operator notes were updated if behavior changed.
