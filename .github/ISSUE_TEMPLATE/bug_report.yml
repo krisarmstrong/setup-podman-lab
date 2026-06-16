@@ -1,120 +1,96 @@
-name: Bug Report
-description: Report a bug or unexpected behavior
-title: "[Bug]: "
-labels: ["bug", "triage"]
+name: Defect
+description: Report a reproducible defect or regression in Setup Podman Lab
+title: "Defect: "
+labels: ["type: defect", "status: needs-triage"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible.
-
   - type: textarea
-    id: description
+    id: summary
     attributes:
-      label: Description
-      description: A clear description of what the bug is
-      placeholder: Tell us what you see!
+      label: Summary
+      description: What broke, and what impact does it have?
+      placeholder: Describe the defect in one or two sentences.
     validations:
       required: true
-
   - type: textarea
-    id: reproduce
+    id: steps
     attributes:
       label: Steps to Reproduce
-      description: Steps to reproduce the behavior
+      description: Provide the shortest reliable path to reproduce the defect.
       placeholder: |
-        1. Run './setup-podman-lab.sh'
-        2. Execute '...'
-        3. See error
+        1. ...
+        2. ...
+        3. ...
     validations:
       required: true
-
   - type: textarea
     id: expected
     attributes:
       label: Expected Behavior
-      description: What you expected to happen
-      placeholder: I expected...
     validations:
       required: true
-
   - type: textarea
     id: actual
     attributes:
       label: Actual Behavior
-      description: What actually happened
-      placeholder: Instead, I got...
     validations:
       required: true
-
   - type: dropdown
-    id: os
+    id: area
     attributes:
-      label: Operating System
-      description: Which OS are you running?
+      label: Area
       options:
-        - macOS
-        - Linux (Ubuntu/Debian)
-        - Linux (Fedora/RHEL)
-        - Linux (Arch)
-        - Linux (Other)
-        - Other
+        - area: api
+        - area: build
+        - area: ci
+        - area: cli
+        - area: config
+        - area: data
+        - area: docs
+        - area: frontend
+        - area: infra
+        - area: packaging
+        - area: security
+        - area: tests
+        - area: tooling
     validations:
       required: true
-
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - severity: critical
+        - severity: high
+        - severity: medium
+        - severity: low
+    validations:
+      required: true
   - type: input
-    id: podman-version
+    id: version
     attributes:
-      label: Podman Version
-      description: Output of `podman --version`
-      placeholder: "podman version 4.9.3"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: profile
+      label: Version or Commit
+      placeholder: v1.2.3, commit SHA, deployed URL, or "main"
+  - type: input
+    id: environment
     attributes:
-      label: Lab Profile
-      description: Which profile were you using?
-      options:
-        - all (default)
-        - light
-        - dev
-        - net
-        - sec
-        - monitor
-        - custom (--components)
-    validations:
-      required: true
-
+      label: Environment
+      placeholder: OS, browser, device, deployment target, or runtime version
   - type: textarea
     id: logs
     attributes:
-      label: Log Output
-      description: |
-        Please include relevant log output from:
-        - Console output
-        - Log file (usually in ~/logs/setup-podman-lab-*.log or $PODMAN_LAB_ROOT/logs/)
-        - Container logs (`podman logs <container>`)
+      label: Logs or Output
+      description: Paste only relevant output. Redact secrets.
       render: shell
-      placeholder: Paste log output here
-
   - type: textarea
     id: context
     attributes:
       label: Additional Context
-      description: Any other context about the problem (environment variables, custom configurations, etc.)
-      placeholder: I was using LAB_REGISTRY_MIRROR=...
-
   - type: checkboxes
-    id: terms
+    id: checklist
     attributes:
-      label: Checklist
-      description: Please confirm the following
+      label: Pre-submission Checklist
       options:
-        - label: I have searched existing issues to avoid duplicates
+        - label: I searched existing issues and did not find a duplicate.
           required: true
-        - label: I have included podman version and OS information
-          required: true
-        - label: I have included relevant log output
+        - label: I included enough detail for someone else to reproduce or investigate.
           required: true
